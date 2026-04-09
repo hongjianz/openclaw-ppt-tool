@@ -71,6 +71,8 @@ def main():
                        help='幻灯片高度 (英寸, 默认: 7.5)')
     parser.add_argument('--smart-paginate', action='store_true',
                        help='启用智能分页(按语义单元而非字符数)')
+    parser.add_argument('--smart-layout', action='store_true',
+                       help='启用智能布局模式(预扫描+智能分页，避免重叠)')
     parser.add_argument('--max-lines', type=int, default=None,
                        help='每页最大行数 (默认使用配置文件)')
     parser.add_argument('--toc', action='store_true',
@@ -215,10 +217,18 @@ def main():
     print("生成PPT...")
     try:
         generator = PPTGenerator(config)
-        success = safe_generate_ppt(generator, content, args.output)
-
-        if not success:
-            graceful_exit("PPT生成失败,请检查错误信息", 1)
+        
+        # 选择生成模式
+        if args.smart_layout:
+            # 使用智能布局模式
+            print("使用智能布局模式（预扫描 + 智能分页）...")
+            generator.generate_with_smart_layout(content, args.output)
+        else:
+            # 使用传统模式
+            success = safe_generate_ppt(generator, content, args.output)
+            
+            if not success:
+                graceful_exit("PPT生成失败,请检查错误信息", 1)
 
         # 执行输出回调
         if args.upload_to_feishu or args.send_to_chat:

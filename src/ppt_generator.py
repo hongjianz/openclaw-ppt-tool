@@ -15,6 +15,7 @@ from pptx.enum.shapes import MSO_SHAPE
 
 from .template_config import TemplateConfig
 from .content_parser import SlideContent, PresentationContent, TableData, CodeBlock, ChartData
+from .smart_layout import create_layout_plan, ContentBlock
 
 
 def hex_to_rgb(hex_color: str) -> RGBColor:
@@ -802,6 +803,259 @@ class PPTGenerator:
         self.prs.save(output_path)
         print(f"PPT已生成: {output_path}")
         print(f"共 {len(self.prs.slides)} 页")
+
+    def generate_with_smart_layout(self, content: PresentationContent, output_path: str):
+        """
+        使用智能布局生成PPT（两阶段方法）
+
+        阶段1: 内容预扫描 - 计算每个内容块的实际高度
+        阶段2: 智能分页 - 根据内容高度分配到页面
+        阶段3: 按分页结果渲染 - 避免重叠
+
+        Args:
+            content: 结构化的演示文稿内容
+            output_path: 输出文件路径
+        """
+        # 清空现有幻灯片
+        while len(self.prs.slides) > 0:
+            rId = self.prs.slides._sldIdLst[0].rId
+            self.prs.part.drop_rel(rId)
+            del self.prs.slides._sldIdLst[0]
+
+        print("\n" + "="*60)
+        print("智能布局模式 - 开始内容预扫描")
+        print("="*60)
+
+        # 阶段 1 & 2: 创建布局计划（预扫描 + 智能分页）
+        layout_plan = create_layout_plan(content.slides, self.config)
+        total_pages = len(layout_plan)
+
+        print(f"\n预扫描完成: 共 {total_pages} 页内容")
+
+        # 添加标题页（使用第一页的内容）
+        if content.slides:
+            first_slide = content.slides[0]
+            self.add_title_slide(first_slide.title, first_slide.subtitle)
+            if self.config.show_footer_on_title_slide:
+                self._add_footer(self.prs.slides[0], 1, total_pages + 1)
+
+        # 阶段 3: 渲染每个内容页
+        for page_idx, page_blocks in enumerate(layout_plan, 1):
+            print(f"\n渲染第 {page_idx}/{total_pages} 页...")
+            self._render_content_page(page_blocks)
+            
+            # 添加页脚
+            self._add_footer(self.prs.slides[page_idx], page_idx + 1, total_pages + 1)
+
+        # 保存文件
+        self.prs.save(output_path)
+        print(f"\n{'='*60}")
+        print(f"PPT已生成: {output_path}")
+        print(f"共 {len(self.prs.slides)} 页")
+        print(f"{'='*60}\n")
+
+    def _render_content_page(self, blocks: List[ContentBlock]):
+        """
+        渲染单个内容页（使用预计算的内容块）
+
+        Args:
+            blocks: 该页的内容块列表
+        """
+        slide_layout = self.prs.slide_layouts[6]  # 空白布局
+        slide = self.prs.slides.add_slide(slide_layout)
+        self.set_background(slide)
+
+        # 计算可用区域
+        margin_left = float(self.config.margin_left)
+        margin_right = float(self.config.margin_right)
+        margin_top = float(self.config.margin_top)
+        margin_bottom = float(self.config.margin_bottom)
+
+        slide_width = float(self.prs.slide_width.inches) if hasattr(self.prs.slide_width, 'inches') else float(self.prs.slide_width / 914400)
+        slide_height = float(self.prs.slide_height.inches) if hasattr(self.prs.slide_height, 'inches') else float(self.prs.slide_height / 914400)
+
+        available_width = slide_width - margin_left - margin_right
+        available_height = slide_height - margin_top - margin_bottom
+
+        current_top = margin_top
+
+        # 按顺序渲染每个内容块
+        for block in blocks:
+            # 检查空间是否足够
+            remaining_height = available_height - (current_top - margin_top)
+            
+            if remaining_height < block.min_height and block.min_height > 0:
+                print(f"  警告: 空间不足，跳过 {block.type} 块 (需要 {block.height:.2f}\", 剩余 {remaining_height:.2f}\")")
+                continue
+
+            if block.type == 'title':
+                # 渲染标题
+                title_box = slide.shapes.add_textbox(
+                    Inches(margin_left), Inches(current_top),
+                    Inches(available_width), Inches(block.height)
+                )
+                title_frame = title_box.text_frame
+                title_frame.word_wrap = True
+
+                p = title_frame.paragraphs[0]
+                p.text = block.content
+                p.font.name = self.config.title_font
+                p.font.size = Pt(self.config.title_size)
+                p.font.bold = True
+                p.font.color.rgb = safe_color(self.config.primary_color, "#FFFFFF")
+                p.alignment = PP_ALIGN.LEFT
+
+            elif block.type == 'subtitle':
+                # 渲染副标题
+                subtitle_box = slide.shapes.add_textbox(
+                    Inches(margin_left), Inches(current_top),
+                    Inches(available_width), Inches(block.height)
+                )
+                sub_frame = subtitle_box.text_frame
+                sub_frame.word_wrap = True
+
+                p = sub_frame.paragraphs[0]
+                p.text = block.content
+                p.font.name = self.config.content_font
+                p.font.size = Pt(self.config.subtitle_size - 4)
+                p.font.color.rgb = safe_color(self.config.secondary_color, "#E0E0E0")
+                p.alignment = PP_ALIGN.LEFT
+
+            elif block.type == 'image':
+                # 渲染图片
+                img_path = block.content['path']
+                img_height = self._add_image(slide, img_path, margin_left, current_top, available_width)
+                # 更新实际高度（可能与预估不同）
+                block.height = img_height + 0.3
+
+            elif block.type == 'table':
+                # 渲染表格
+                table_data = block.content
+                table_height = self._add_table(slide, table_data, margin_left, current_top, available_width)
+                block.height = table_height + 0.3
+
+            elif block.type == 'bullet':
+                # 渲染项目符号列表
+                bullet_points = block.content
+                bullet_box = slide.shapes.add_textbox(
+                    Inches(margin_left), Inches(current_top),
+                    Inches(available_width), Inches(block.height)
+                )
+                bullet_frame = bullet_box.text_frame
+                bullet_frame.word_wrap = True
+                bullet_frame.line_spacing = self.config.line_spacing
+
+                for i, point in enumerate(bullet_points):
+                    if i == 0:
+                        p = bullet_frame.paragraphs[0]
+                    else:
+                        p = bullet_frame.add_paragraph()
+
+                    is_subitem = point.strip().startswith('•') or point.startswith('   ')
+                    apply_bold_formatting(p, point.strip())
+
+                    p.font.name = self.config.content_font
+                    if is_subitem:
+                        p.font.size = Pt(self.config.body_size - 4)
+                        p.level = 1
+                    else:
+                        p.font.size = Pt(self.config.body_size)
+                        p.level = 0
+
+                    p.font.color.rgb = safe_color(self.config.text_color, "#FFFFFF")
+                    p.space_before = Pt(6)
+                    p.space_after = Pt(6)
+
+            elif block.type == 'text':
+                # 渲染普通文本
+                full_text = block.content
+                text_box = slide.shapes.add_textbox(
+                    Inches(margin_left), Inches(current_top),
+                    Inches(available_width), Inches(block.height)
+                )
+                content_frame = text_box.text_frame
+                content_frame.word_wrap = True
+                content_frame.line_spacing = self.config.line_spacing
+
+                paragraphs = self._split_text_into_paragraphs(full_text)
+                for i, paragraph in enumerate(paragraphs):
+                    if i == 0:
+                        p = content_frame.paragraphs[0]
+                    else:
+                        p = content_frame.add_paragraph()
+
+                    apply_bold_formatting(p, paragraph)
+                    p.font.name = self.config.content_font
+                    p.font.size = Pt(self.config.body_size)
+                    p.font.color.rgb = safe_color(self.config.text_color, "#FFFFFF")
+                    p.space_before = Pt(6)
+                    p.space_after = Pt(6)
+
+            elif block.type == 'code':
+                # 渲染代码块
+                code_block = block.content
+                code_box = slide.shapes.add_textbox(
+                    Inches(margin_left), Inches(current_top),
+                    Inches(available_width), Inches(block.height)
+                )
+                code_frame = code_box.text_frame
+                code_frame.word_wrap = True
+                code_frame.line_spacing = 1.1
+
+                code_box.fill.solid()
+                code_box.fill.fore_color.rgb = safe_color("#2D2D2D", "#F5F5F5")
+
+                p = code_frame.paragraphs[0]
+                p.text = code_block.content
+
+                for paragraph in code_frame.paragraphs:
+                    paragraph.font.name = "Consolas" if os.name == 'nt' else "Monaco"
+                    paragraph.font.size = Pt(12)
+                    paragraph.font.color.rgb = safe_color("#E0E0E0", "#FFFFFF")
+
+            elif block.type == 'mermaid':
+                # 渲染 Mermaid 图表
+                from .mermaid_converter import convert_mermaid_to_image
+
+                code_content = block.content['code']
+                img_path = convert_mermaid_to_image(code_content, output_format='png')
+
+                if img_path:
+                    # 作为图片插入
+                    img_height = self._add_image(slide, img_path, margin_left, current_top, available_width)
+                    block.height = img_height + 0.2
+                else:
+                    # 降级为代码块显示
+                    print("  降级: Mermaid图表将以代码形式显示")
+                    code_box = slide.shapes.add_textbox(
+                        Inches(margin_left), Inches(current_top),
+                        Inches(available_width), Inches(block.height)
+                    )
+                    code_frame = code_box.text_frame
+                    code_frame.word_wrap = True
+
+                    code_box.fill.solid()
+                    code_box.fill.fore_color.rgb = safe_color("#2D2D2D", "#F5F5F5")
+
+                    p = code_frame.paragraphs[0]
+                    p.text = code_content
+
+                    for paragraph in code_frame.paragraphs:
+                        paragraph.font.name = "Consolas" if os.name == 'nt' else "Monaco"
+                        paragraph.font.size = Pt(12)
+                        paragraph.font.color.rgb = safe_color("#E0E0E0", "#FFFFFF")
+
+            elif block.type == 'chart':
+                # 渲染原生图表
+                chart_data = block.content
+                chart_height = self._add_chart(slide, chart_data, margin_left, current_top,
+                                              available_width, block.height - 0.3)
+                block.height = chart_height + 0.3
+
+            # 更新当前位置（使用块的实际或预估高度）
+            current_top += block.height
+
+            print(f"  ✓ 渲染 {block.type} (高度: {block.height:.2f}\")")
 
     def _add_footer(self, slide, current_page: int, total_pages: int):
         """
