@@ -387,8 +387,13 @@ class PPTGenerator:
         margin_right = Inches(self.config.margin_right)
         margin_top = Inches(self.config.margin_top)
         margin_bottom = Inches(self.config.margin_bottom)
-        available_width = self.prs.slide_width - margin_left - margin_right
-        available_height = self.prs.slide_height - margin_top - margin_bottom
+        
+        # 将slide_width/slide_height转换为Inches后再计算
+        slide_width_inches = self.prs.slide_width.inches if hasattr(self.prs.slide_width, 'inches') else Inches(self.prs.slide_width / 914400)
+        slide_height_inches = self.prs.slide_height.inches if hasattr(self.prs.slide_height, 'inches') else Inches(self.prs.slide_height / 914400)
+        
+        available_width = slide_width_inches - margin_left - margin_right
+        available_height = slide_height_inches - margin_top - margin_bottom
 
         current_top = margin_top
 
