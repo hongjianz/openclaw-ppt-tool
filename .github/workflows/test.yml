@@ -6,7 +6,9 @@ on:
   pull_request:
     branches: [ main, master ]
 
-# Opt into Node.js 24 for JavaScript actions
+# Force JavaScript actions to run on Node.js 24
+# This is required during the Node.js 20 deprecation transition period
+# See: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -15,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # Using latest versions compatible with Node.js 24
     - uses: actions/checkout@v4
 
     - name: Set up Python
