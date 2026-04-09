@@ -14,7 +14,7 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 
 from .template_config import TemplateConfig
-from .content_parser import SlideContent, PresentationContent, TableData
+from .content_parser import SlideContent, PresentationContent, TableData, CodeBlock
 
 
 def hex_to_rgb(hex_color: str) -> RGBColor:
