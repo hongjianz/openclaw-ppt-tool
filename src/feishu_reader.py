@@ -10,6 +10,7 @@
 """
 
 import os
+import sys
 import json
 import requests
 from typing import Optional
@@ -140,7 +141,7 @@ def create_ppt_from_text(content: str, output_path: str, **kwargs):
 
         create_ppt_from_text(content, 'output.pptx')
     """
-    import sys
+    import subprocess
     import tempfile
 
     # 创建临时文件
@@ -150,20 +151,21 @@ def create_ppt_from_text(content: str, output_path: str, **kwargs):
 
     try:
         # 构建命令行参数
-        sys.argv = ['main.py', '-i', temp_file, '-o', output_path]
+        cmd = [sys.executable, 'main.py', '-i', temp_file, '-o', output_path]
 
         # 添加其他参数
         for key, value in kwargs.items():
             if isinstance(value, bool):
                 if value:
-                    sys.argv.append(f'--{key.replace("_", "-")}')
+                    cmd.append(f'--{key.replace("_", "-")}')
             else:
-                sys.argv.append(f'--{key.replace("_", "-")}')
-                sys.argv.append(str(value))
+                cmd.append(f'--{key.replace("_", "-")}')
+                cmd.append(str(value))
 
-        # 导入并运行main
-        from main import main
-        main()
+        # 执行命令
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"PPT生成失败: {result.stderr}")
 
     finally:
         # 清理临时文件
