@@ -4,14 +4,16 @@ PPT生成核心模块 - 使用python-pptx生成演示文稿
 """
 
 import os
+import re
 from typing import List, Optional
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.enum.shapes import MSO_SHAPE
 
 from .template_config import TemplateConfig
-from .content_parser import SlideContent, PresentationContent
+from .content_parser import SlideContent, PresentationContent, TableData
 
 
 def hex_to_rgb(hex_color: str) -> RGBColor:
@@ -111,6 +113,70 @@ class PPTGenerator:
         except Exception as e:
             print(f"警告: 无法生成QuintenStyle背景图片: {e}")
             return None
+
+    def _add_table(self, slide, table_data: TableData, left, top, width):
+        """
+        添加表格到幻灯片
+
+        Args:
+            slide: 幻灯片对象
+            table_data: 表格数据
+            left: 左边距
+            top: 顶部位置
+            width: 表格宽度
+        """
+        rows = len(table_data.rows) + 1  # +1 for header
+        cols = len(table_data.headers)
+
+        if rows == 0 or cols == 0:
+            return
+
+        # 计算行高
+        row_height = Inches(0.5)
+        height = row_height * rows
+
+        # 添加表格
+        table_shape = slide.shapes.add_table(rows, cols, left, top, width, height)
+        table = table_shape.table
+
+        # 设置表头
+        for i, header in enumerate(table_data.headers):
+            cell = table.cell(0, i)
+            cell.text = header
+
+            # 设置表头样式
+            for paragraph in cell.text_frame.paragraphs:
+                paragraph.font.size = Pt(self.config.body_size - 2)
+                paragraph.font.bold = True
+                paragraph.font.color.rgb = safe_color("#1A4D4D", "#FFFFFF")
+                paragraph.alignment = PP_ALIGN.CENTER
+
+            # 设置表头背景
+            fill = cell.fill
+            fill.solid()
+            fill.fore_color.rgb = safe_color("rgba(180, 205, 190, 0.85)", "#B0C5BE")
+
+        # 设置数据行
+        for row_idx, row_data in enumerate(table_data.rows, 1):
+            for col_idx, cell_data in enumerate(row_data):
+                if col_idx < cols:
+                    cell = table.cell(row_idx, col_idx)
+                    cell.text = cell_data
+
+                    # 设置单元格样式
+                    for paragraph in cell.text_frame.paragraphs:
+                        paragraph.font.size = Pt(self.config.body_size - 2)
+                        paragraph.font.color.rgb = safe_color("#1A4D4D", "#333333")
+
+                        # 设置对齐方式
+                        if col_idx < len(table_data.alignment):
+                            align = table_data.alignment[col_idx]
+                            if align == 'center':
+                                paragraph.alignment = PP_ALIGN.CENTER
+                            elif align == 'right':
+                                paragraph.alignment = PP_ALIGN.RIGHT
+                            else:
+                                paragraph.alignment = PP_ALIGN.LEFT
 
     def add_title_slide(self, title: str, subtitle: str = ""):
         """添加标题页"""
@@ -217,8 +283,14 @@ class PPTGenerator:
 
             current_top += subtitle_height + Inches(0.2)
 
+        # 添加表格
+        if slide_content.table:
+            table_top = current_top
+            self._add_table(slide, slide_content.table, margin_left, table_top, available_width)
+            current_top += Inches(3.0)  # 表格占用高度
+
         # 添加项目符号列表
-        if slide_content.bullet_points:
+        elif slide_content.bullet_points:
             remaining_height = available_height - (current_top - margin_top)
             bullet_box = slide.shapes.add_textbox(
                 margin_left, current_top,
@@ -280,8 +352,9 @@ class PPTGenerator:
         max_chars = self.config.max_chars_per_line
         max_lines = self.config.max_lines_per_slide
 
-        # 按句子分割
-        sentences = re.split(r'(?<=[。！？.!?])\s*', text)
+        # 按句子分割 - 修复Python 3.6兼容性,避免空模式匹配
+        # 使用非空断言确保正则表达式有效
+        sentences = re.split(r'(?<=[。！？.!?])\s+', text) if text else []
 
         paragraphs = []
         current_paragraph = ""

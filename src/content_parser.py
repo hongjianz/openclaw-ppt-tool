@@ -8,13 +8,30 @@ from typing import List, Optional
 
 
 @dataclass
+class TableCell:
+    """表格单元格"""
+    content: str
+    is_header: bool = False
+
+
+@dataclass
+class TableData:
+    """表格数据"""
+    headers: List[str] = field(default_factory=list)
+    rows: List[List[str]] = field(default_factory=list)
+    alignment: List[str] = field(default_factory=list)  # 'left', 'center', 'right'
+
+
+@dataclass
 class SlideContent:
     """单页PPT内容"""
     title: str
     subtitle: str = ""
     content_lines: List[str] = field(default_factory=list)
     bullet_points: List[str] = field(default_factory=list)
+    table: Optional[TableData] = None  # 新增表格支持
     image_path: Optional[str] = None
+    images: List[str] = field(default_factory=list)  # 支持多张图片
 
 
 @dataclass
@@ -32,27 +49,100 @@ def parse_markdown(content: str) -> PresentationContent:
     - # 标题 -> PPT页面标题
     - ## 副标题 -> PPT页面副标题
     - - 或 * 列表项 -> 项目符号
+    - | 表格 | 语法 | -> PPT表格对象
+    - ![alt](url) -> 图片
     - 普通文本 -> 正文内容
     - --- 分隔符 -> 分页
     """
     presentation = PresentationContent()
     current_slide = None
+    in_table = False
+    table_headers = []
+    table_rows = []
+    table_alignment = []
+    prev_line_was_separator = False
 
     lines = content.split('\n')
+    i = 0
 
-    for line in lines:
-        line = line.strip()
+    while i < len(lines):
+        line = lines[i].strip()
+        i += 1
 
         # 跳过空行
         if not line:
+            in_table = False
             continue
 
         # 水平分隔线 - 新页面
         if line.startswith('---'):
             if current_slide:
+                # 如果有未保存的表格
+                if in_table and table_headers:
+                    current_slide.table = TableData(
+                        headers=table_headers,
+                        rows=table_rows,
+                        alignment=table_alignment
+                    )
+                    in_table = False
+                    table_headers = []
+                    table_rows = []
+                    table_alignment = []
                 presentation.slides.append(current_slide)
             current_slide = SlideContent(title="", content_lines=[], bullet_points=[])
             continue
+
+        # 检测Markdown表格
+        if '|' in line and not line.startswith('#') and not line.startswith('- '):
+            # 检查是否是表头分隔行 (|---|---|)
+            if re.match(r'^[\s|:-]+$', line.replace('-', '').replace('|', '')):
+                # 解析对齐方式
+                parts = [p.strip() for p in line.split('|') if p.strip()]
+                table_alignment = []
+                for part in parts:
+                    if part.startswith(':') and part.endswith(':'):
+                        table_alignment.append('center')
+                    elif part.endswith(':'):
+                        table_alignment.append('right')
+                    else:
+                        table_alignment.append('left')
+                prev_line_was_separator = True
+                i += 1
+                continue
+
+            # 表格行
+            parts = [p.strip() for p in line.split('|')]
+            # 移除首尾空元素
+            if parts and parts[0] == '':
+                parts = parts[1:]
+            if parts and parts[-1] == '':
+                parts = parts[:-1]
+
+            if not prev_line_was_separator and not in_table:
+                # 这是表头
+                table_headers = parts
+                in_table = True
+            elif in_table:
+                # 这是数据行
+                table_rows.append(parts)
+
+            prev_line_was_separator = False
+            continue
+
+        # 如果之前在解析表格,现在结束了
+        if in_table and not ('|' in line):
+            # 保存表格到当前slide
+            if current_slide and table_headers:
+                current_slide.table = TableData(
+                    headers=table_headers,
+                    rows=table_rows,
+                    alignment=table_alignment
+                )
+            in_table = False
+            table_headers = []
+            table_rows = []
+            table_alignment = []
+            prev_line_was_separator = False
 
         # 一级标题 - 新页面标题
         if line.startswith('# ') and not line.startswith('## '):
@@ -60,7 +150,7 @@ def parse_markdown(content: str) -> PresentationContent:
                 current_slide = SlideContent(title="", content_lines=[], bullet_points=[])
 
             # 如果当前页面已有内容,先保存
-            if current_slide.title and (current_slide.content_lines or current_slide.bullet_points):
+            if current_slide and current_slide.title and (current_slide.content_lines or current_slide.bullet_points or current_slide.table):
                 presentation.slides.append(current_slide)
                 current_slide = SlideContent(title="", content_lines=[], bullet_points=[])
 
@@ -72,6 +162,14 @@ def parse_markdown(content: str) -> PresentationContent:
             if current_slide is None:
                 current_slide = SlideContent(title="", content_lines=[], bullet_points=[])
             current_slide.subtitle = line[3:].strip()
+            continue
+
+        # 图片语法 ![alt](url)
+        img_match = re.match(r'!\[([^\]]*)\]\(([^)]+)\)', line)
+        if img_match:
+            if current_slide is None:
+                current_slide = SlideContent(title="", content_lines=[], bullet_points=[])
+            current_slide.images.append(img_match.group(2))
             continue
 
         # 列表项
@@ -90,6 +188,14 @@ def parse_markdown(content: str) -> PresentationContent:
             current_slide.title = line
         else:
             current_slide.content_lines.append(line)
+
+    # 处理最后的表格
+    if current_slide and in_table and table_headers:
+        current_slide.table = TableData(
+            headers=table_headers,
+            rows=table_rows,
+            alignment=table_alignment
+        )
 
     # 添加最后一页
     if current_slide:
