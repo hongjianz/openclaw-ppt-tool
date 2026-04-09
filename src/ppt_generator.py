@@ -502,21 +502,24 @@ class PPTGenerator:
             full_text = ' '.join(slide_content.content_lines)
 
             # 计算文本实际占用高度
+            # available_width可能是Inches对象或浮点数
+            avail_width_inches = available_width.inches if hasattr(available_width, 'inches') else available_width
             text_height = calculate_text_height(
                 full_text,
                 self.config.body_size,
                 self.config.line_spacing,
-                available_width.inches
+                avail_width_inches
             )
 
             # 计算剩余可用高度
             remaining_height = available_height - (current_top - margin_top)
 
             # 如果文本会超出页面，截断并给出警告
-            if text_height > remaining_height.inches:
-                print(f"警告: 文本内容超出页面空间 ({text_height:.2f}\" > {remaining_height.inches:.2f}\")")
+            remaining_height_inches = remaining_height.inches if hasattr(remaining_height, 'inches') else remaining_height
+            if text_height > remaining_height_inches:
+                print(f"警告: 文本内容超出页面空间 ({text_height:.2f}\" > {remaining_height_inches:.2f}\")")
                 # 仍然添加，但限制高度
-                text_height_to_use = min(text_height, remaining_height.inches)
+                text_height_to_use = min(text_height, remaining_height_inches)
             else:
                 text_height_to_use = text_height
 
@@ -552,7 +555,8 @@ class PPTGenerator:
             for code_block in slide_content.code_blocks:
                 remaining_height = available_height - (current_top - margin_top)
 
-                if remaining_height < Inches(1.0):
+                remaining_height_val = remaining_height.inches if hasattr(remaining_height, 'inches') else remaining_height
+                if remaining_height_val < 1.0:
                     print(f"警告: 页面空间不足，跳过代码块")
                     break
 
@@ -560,9 +564,9 @@ class PPTGenerator:
                 code_lines_count = len(code_block.content.split('\n'))
                 code_height = code_lines_count * (Pt(12) / 72.0 * 1.1) + 0.3  # 等宽字体稍小，加边距
 
-                if code_height > remaining_height.inches:
+                if code_height > remaining_height_val:
                     print(f"警告: 代码块超出页面空间")
-                    code_height = remaining_height.inches
+                    code_height = remaining_height_val
 
                 # 创建代码框
                 code_box = slide.shapes.add_textbox(
