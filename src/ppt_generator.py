@@ -14,7 +14,7 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 
 from .template_config import TemplateConfig
-from .content_parser import SlideContent, PresentationContent, TableData, CodeBlock
+from .content_parser import SlideContent, PresentationContent, TableData, CodeBlock, ChartData
 
 
 def hex_to_rgb(hex_color: str) -> RGBColor:
@@ -364,6 +364,58 @@ class PPTGenerator:
             print(f"  警告: 图片插入失败: {e}")
             return 0.0
 
+    def _add_chart(self, slide, chart_data: ChartData, left: float, top: float,
+                   width: float, height: float) -> float:
+        """
+        添加原生图表到幻灯片
+
+        Args:
+            slide: 幻灯片对象
+            chart_data: 图表数据
+            left, top: 位置（英寸）
+            width, height: 尺寸（英寸）
+
+        Returns:
+            实际占用高度（英寸）
+        """
+        from pptx.chart.data import CategoryChartData
+        from pptx.enum.chart import XL_CHART_TYPE
+
+        # 映射图表类型
+        type_map = {
+            'bar': XL_CHART_TYPE.BAR_CLUSTERED,
+            'column': XL_CHART_TYPE.COLUMN_CLUSTERED,
+            'pie': XL_CHART_TYPE.PIE,
+            'line': XL_CHART_TYPE.LINE
+        }
+
+        chart_type = type_map.get(chart_data.chart_type.lower(), XL_CHART_TYPE.COLUMN_CLUSTERED)
+
+        # 准备数据
+        pptx_chart_data = CategoryChartData()
+        pptx_chart_data.categories = chart_data.categories
+
+        for series in chart_data.series:
+            pptx_chart_data.add_series(series.name, series.values)
+
+        # 添加图表
+        chart_shape = slide.shapes.add_chart(
+            chart_type, Inches(left), Inches(top),
+            Inches(width), Inches(height), pptx_chart_data
+        )
+        chart = chart_shape.chart
+
+        # 设置标题
+        if chart_data.title:
+            chart.has_title = True
+            chart.chart_title.text_frame.text = chart_data.title
+
+        # 显示图例
+        chart.has_legend = True
+        chart.legend.include_in_layout = False
+
+        return height
+
     def add_title_slide(self, title: str, subtitle: str = ""):
         """添加标题页"""
         slide_layout = self.prs.slide_layouts[6]  # 空白布局
@@ -609,7 +661,23 @@ class PPTGenerator:
                     print(f"警告: 页面空间不足，跳过代码块")
                     break
 
-                # 计算代码块高度（浮点数）
+                # 检测是否为Mermaid图表
+                if code_block.language.lower() in ['mermaid', 'mmd'] or code_block.is_diagram:
+                    # 尝试转换为图片
+                    from .mermaid_converter import convert_mermaid_to_image
+
+                    img_path = convert_mermaid_to_image(code_block.content, output_format='png')
+
+                    if img_path:
+                        # 作为图片插入
+                        img_height = self._add_image(slide, img_path, margin_left, current_top, available_width)
+                        current_top += img_height + 0.2
+                        continue
+                    else:
+                        # 降级为代码块显示
+                        print("  降级: Mermaid图表将以代码形式显示")
+
+                # 普通代码块渲染（原有逻辑）
                 code_lines_count = len(code_block.content.split('\n'))
                 code_height = code_lines_count * (12 / 72.0 * 1.1) + 0.3
 
@@ -642,6 +710,22 @@ class PPTGenerator:
                     paragraph.font.color.rgb = safe_color("#E0E0E0", "#FFFFFF")
 
                 current_top += code_height + 0.2
+
+        # 添加图表
+        if slide_content.charts:
+            for chart_data in slide_content.charts:
+                remaining_height = available_height - (current_top - margin_top)
+
+                if remaining_height < 3.0:  # 图表最小高度
+                    print(f"警告: 页面空间不足，跳过图表")
+                    break
+
+                chart_height = min(self.config.default_chart_height, remaining_height)
+                chart_width = self.config.default_chart_width
+
+                self._add_chart(slide, chart_data, margin_left, current_top,
+                               chart_width, chart_height)
+                current_top += chart_height + 0.3
 
     def _split_text_into_paragraphs(self, text: str) -> List[str]:
         """

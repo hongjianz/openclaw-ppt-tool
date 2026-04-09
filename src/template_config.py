@@ -56,6 +56,11 @@ class TemplateConfig:
     footer_font_size: int = 10          # 页脚字号
     footer_color: str = "#666666"       # 页脚颜色
 
+    # 图表配置
+    default_chart_width: float = 8.0   # 默认图表宽度（英寸）
+    default_chart_height: float = 4.0  # 默认图表高度（英寸）
+    chart_color_scheme: str = "default"  # 配色方案
+
     @classmethod
     def from_json(cls, config_path: str) -> "TemplateConfig":
         """从JSON配置文件加载配置"""

@@ -31,6 +31,22 @@ class CodeBlock:
 
 
 @dataclass
+class ChartSeries:
+    """图表数据系列"""
+    name: str
+    values: List[float]
+
+
+@dataclass
+class ChartData:
+    """图表数据"""
+    chart_type: str  # 'bar', 'pie', 'line', 'column'
+    title: str
+    categories: List[str]  # X轴分类或饼图标签
+    series: List[ChartSeries]  # 数据系列
+
+
+@dataclass
 class SlideContent:
     """单页PPT内容"""
     title: str
@@ -41,6 +57,7 @@ class SlideContent:
     image_path: Optional[str] = None
     images: List[str] = field(default_factory=list)  # 支持多张图片
     code_blocks: List[CodeBlock] = field(default_factory=list)  # 代码块
+    charts: List[ChartData] = field(default_factory=list)  # 图表支持
 
 
 @dataclass
@@ -77,6 +94,11 @@ def parse_markdown(content: str) -> PresentationContent:
     in_code_block = False
     code_lines = []
     code_language = "text"
+
+    # 图表块相关
+    in_chart_block = False
+    chart_attrs = {}  # type, title
+    chart_lines = []
 
     lines = content.split('\n')
     i = 0
@@ -115,7 +137,7 @@ def parse_markdown(content: str) -> PresentationContent:
                     table_headers = []
                     table_rows = []
                     table_alignment = []
-                
+
                 # 如果有未保存的代码块
                 if in_code_block and code_lines:
                     code_content = '\n'.join(code_lines)
@@ -127,7 +149,16 @@ def parse_markdown(content: str) -> PresentationContent:
                     ))
                     in_code_block = False
                     code_lines = []
-                    
+
+                # 如果有未保存的图表块
+                if in_chart_block and chart_lines:
+                    chart_data = _parse_chart_block(chart_attrs, chart_lines)
+                    if chart_data:
+                        current_slide.charts.append(chart_data)
+                    in_chart_block = False
+                    chart_attrs = {}
+                    chart_lines = []
+
                 presentation.slides.append(current_slide)
             current_slide = SlideContent(title="", content_lines=[], bullet_points=[])
             continue
@@ -151,6 +182,31 @@ def parse_markdown(content: str) -> PresentationContent:
                 # 开始代码块
                 in_code_block = True
                 code_language = line[3:].strip() or "text"
+            continue
+
+        # 检测图表块开始/结束 :::chart{...}
+        chart_start_match = re.match(r'^:::chart\{(.+?)\}$', line)
+        if chart_start_match and not in_chart_block:
+            # 开始图表块
+            in_chart_block = True
+            chart_attrs = _parse_chart_attrs(chart_start_match.group(1))
+            chart_lines = []
+            continue
+
+        if line.startswith(':::') and in_chart_block:
+            # 结束图表块
+            if chart_lines:
+                chart_data = _parse_chart_block(chart_attrs, chart_lines)
+                if chart_data and current_slide:
+                    current_slide.charts.append(chart_data)
+            in_chart_block = False
+            chart_attrs = {}
+            chart_lines = []
+            continue
+
+        # 如果在图表块内，收集图表数据行
+        if in_chart_block:
+            chart_lines.append(line)
             continue
         
         # 如果在代码块内，收集代码行
@@ -279,6 +335,12 @@ def parse_markdown(content: str) -> PresentationContent:
             is_diagram=is_diagram
         ))
 
+    # 处理最后未关闭的图表块
+    if current_slide and in_chart_block and chart_lines:
+        chart_data = _parse_chart_block(chart_attrs, chart_lines)
+        if chart_data:
+            current_slide.charts.append(chart_data)
+
     # 添加最后一页
     if current_slide:
         presentation.slides.append(current_slide)
@@ -288,6 +350,117 @@ def parse_markdown(content: str) -> PresentationContent:
         presentation.title = presentation.slides[0].title
 
     return presentation
+
+
+def _parse_chart_attrs(attr_string: str) -> dict:
+    """
+    解析图表块属性字符串
+
+    Args:
+        attr_string: 属性字符串，如 'type="bar" title="销售数据"'
+
+    Returns:
+        属性字典
+    """
+    attrs = {}
+
+    # 解析 type
+    type_match = re.search(r'type="([^"]+)"', attr_string)
+    if type_match:
+        attrs['type'] = type_match.group(1)
+
+    # 解析 title
+    title_match = re.search(r'title="([^"]+)"', attr_string)
+    if title_match:
+        attrs['title'] = title_match.group(1)
+
+    return attrs
+
+
+def _parse_chart_block(attrs: dict, lines: List[str]) -> Optional[ChartData]:
+    """
+    解析图表块数据
+
+    Args:
+        attrs: 属性字典
+        lines: 图表数据行
+
+    Returns:
+        ChartData对象或None
+    """
+    if not lines or 'type' not in attrs:
+        return None
+
+    chart_type = attrs.get('type', 'column').lower()
+    title = attrs.get('title', '')
+
+    categories = []
+    series_list = []
+
+    # 检测数据格式类型
+    # 格式1: 表格格式 (| 季度 | Q1 | Q2 | ... |)
+    if any('|' in line for line in lines):
+        # 表格格式解析
+        table_rows = []
+        for line in lines:
+            if '|' not in line:
+                continue
+            parts = [p.strip() for p in line.split('|')]
+            # 移除首尾空元素
+            if parts and parts[0] == '':
+                parts = parts[1:]
+            if parts and parts[-1] == '':
+                parts = parts[:-1]
+            if parts:
+                table_rows.append(parts)
+
+        if len(table_rows) >= 2:
+            # 第一行是表头（分类）
+            categories = table_rows[0][1:]  # 跳过第一列（系列名）
+
+            # 后续行是数据系列
+            for row in table_rows[1:]:
+                if len(row) >= 2:
+                    series_name = row[0]
+                    try:
+                        values = [float(v) for v in row[1:]]
+                        series_list.append(ChartSeries(name=series_name, values=values))
+                    except ValueError:
+                        print(f"警告: 图表数据解析失败，跳过非数字值: {row}")
+
+    # 格式2: 列表格式 (- 产品A: 35)
+    elif any(line.startswith('- ') and ':' in line for line in lines):
+        # 饼图列表格式
+        for line in lines:
+            if not line.startswith('- ') or ':' not in line:
+                continue
+            # 解析 "标签: 值"
+            match = re.match(r'-\s*(.+?):\s*([\d.]+)\s*$', line)
+            if match:
+                label = match.group(1).strip()
+                try:
+                    value = float(match.group(2).strip())
+                    categories.append(label)
+                    series_list.append(ChartSeries(name=label, values=[value]))
+                except ValueError:
+                    continue
+
+        # 对于饼图，如果只有一个系列，需要重新组织
+        if chart_type == 'pie' and len(series_list) > 0:
+            # 合并为单一数据系列
+            pie_values = [s.values[0] for s in series_list]
+            series_list = [ChartSeries(name=title or '数据', values=pie_values)]
+
+    if not categories or not series_list:
+        print(f"警告: 图表数据解析失败，没有有效的分类或数据系列")
+        return None
+
+    return ChartData(
+        chart_type=chart_type,
+        title=title,
+        categories=categories,
+        series=series_list
+    )
 
 
 def _is_diagram(code_content: str) -> bool:
