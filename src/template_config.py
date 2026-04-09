@@ -48,6 +48,14 @@ class TemplateConfig:
     style_name: str = ""                # 样式名称(如 QuintenStyle)
     use_gradient_background: bool = False  # 是否使用渐变背景
 
+    # 页脚配置
+    footer_text: str = ""               # 页脚文本
+    show_page_number: bool = True       # 是否显示页码
+    page_number_format: str = "第 {current} / {total} 页"  # 页码格式
+    show_footer_on_title_slide: bool = False  # 是否在标题页显示页脚
+    footer_font_size: int = 10          # 页脚字号
+    footer_color: str = "#666666"       # 页脚颜色
+
     @classmethod
     def from_json(cls, config_path: str) -> "TemplateConfig":
         """从JSON配置文件加载配置"""

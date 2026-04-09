@@ -71,6 +71,14 @@ def main():
                        help='自动生成目录页')
     parser.add_argument('--no-subtitles-in-toc', action='store_true',
                        help='目录中不包含副标题')
+    parser.add_argument('--footer', type=str, default='',
+                       help='页脚文本')
+    parser.add_argument('--no-page-number', action='store_true',
+                       help='不显示页码')
+    parser.add_argument('--page-format', type=str, default=None,
+                       help='页码格式 (默认: 第 {current} / {total} 页)')
+    parser.add_argument('--footer-on-title', action='store_true',
+                       help='在标题页显示页脚')
 
     args = parser.parse_args()
 
@@ -115,6 +123,16 @@ def main():
     # 设置最大行数
     if args.max_lines:
         config.max_lines_per_slide = args.max_lines
+
+    # 配置页脚和页码
+    if args.footer:
+        config.footer_text = args.footer
+    if args.no_page_number:
+        config.show_page_number = False
+    if args.page_format:
+        config.page_number_format = args.page_format
+    if args.footer_on_title:
+        config.show_footer_on_title_slide = True
 
     # 读取文稿内容
     print(f"读取文稿: {args.input}")

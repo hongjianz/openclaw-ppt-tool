@@ -485,19 +485,78 @@ class PPTGenerator:
             self.prs.part.drop_rel(rId)
             del self.prs.slides._sldIdLst[0]
 
+        total_slides = len(content.slides)
+
         # 添加标题页
         if content.slides:
             first_slide = content.slides[0]
             self.add_title_slide(first_slide.title, first_slide.subtitle)
+            # 添加页脚到标题页(如果启用)
+            if self.config.show_footer_on_title_slide:
+                self._add_footer(self.prs.slides[0], 1, total_slides)
 
             # 添加内容页
-            for slide_content in content.slides[1:]:
+            for idx, slide_content in enumerate(content.slides[1:], 2):
                 self.add_content_slide(slide_content)
+                # 添加页脚
+                self._add_footer(self.prs.slides[idx - 1], idx, total_slides)
 
         # 保存文件
         self.prs.save(output_path)
         print(f"PPT已生成: {output_path}")
         print(f"共 {len(self.prs.slides)} 页")
+
+    def _add_footer(self, slide, current_page: int, total_pages: int):
+        """
+        添加页脚和页码到幻灯片
+
+        Args:
+            slide: 幻灯片对象
+            current_page: 当前页码
+            total_pages: 总页数
+        """
+        if not self.config.show_page_number and not self.config.footer_text:
+            return
+
+        # 构建页脚文本
+        footer_parts = []
+
+        # 添加自定义页脚文本
+        if self.config.footer_text:
+            footer_parts.append(self.config.footer_text)
+
+        # 添加页码
+        if self.config.show_page_number:
+            page_text = self.config.page_number_format.format(
+                current=current_page,
+                total=total_pages
+            )
+            footer_parts.append(page_text)
+
+        if not footer_parts:
+            return
+
+        footer_text = " | ".join(footer_parts)
+
+        # 计算页脚位置
+        margin_bottom = Inches(self.config.margin_bottom)
+        footer_height = Inches(0.4)
+        footer_top = self.prs.slide_height - margin_bottom - footer_height
+
+        # 创建页脚文本框
+        footer_box = slide.shapes.add_textbox(
+            Inches(0.5), footer_top,
+            self.prs.slide_width - Inches(1.0), footer_height
+        )
+        footer_frame = footer_box.text_frame
+        footer_frame.word_wrap = True
+
+        p = footer_frame.paragraphs[0]
+        p.text = footer_text
+        p.font.name = self.config.content_font
+        p.font.size = Pt(self.config.footer_font_size)
+        p.font.color.rgb = safe_color(self.config.footer_color, "#666666")
+        p.alignment = PP_ALIGN.CENTER
 
 
 # 需要导入re模块
