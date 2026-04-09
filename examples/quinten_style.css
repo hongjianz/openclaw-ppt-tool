@@ -1,0 +1,64 @@
+/* QuintenStyle - 公司模板样式 */
+
+/*
+ * 背景说明:
+ * 由于PPT不支持CSS的复杂渐变语法,此CSS文件定义了颜色方案
+ * 实际背景效果需要通过背景图片实现
+ * 运行 generate_quinten_background.py 生成背景图片
+ */
+
+section {
+    /* 主背景色 */
+    background-color: #267878;
+    color: #FFFFFF;
+}
+
+h1, h2, h3 {
+    color: #FFFFFF !important;
+}
+
+p, li {
+    color: #FFFFFF !important;
+}
+
+header {
+    color: rgba(255,255,255,0.8);
+}
+
+footer {
+    color: rgba(255,255,255,0.6);
+}
+
+/* 表格样式 - PPT中需要手动调整 */
+table {
+    background: rgba(220, 235, 225, 0.8);
+    border-radius: 14px;
+}
+
+table th {
+    color: #1A4D4D !important;
+    background: rgba(180, 205, 190, 0.85);
+}
+
+table td {
+    color: #1A4D4D !important;
+}
+
+/* 提示框样式 */
+.tip {
+    background: rgba(232, 244, 255, 0.9);
+    border-color: #0066CC;
+    color: #1A4D4D !important;
+}
+
+.warning {
+    background: rgba(255, 244, 229, 0.9);
+    border-color: #FF9500;
+    color: #1A4D4D !important;
+}
+
+.success {
+    background: rgba(229, 249, 232, 0.9);
+    border-color: #34C759;
+    color: #1A4D4D !important;
+}

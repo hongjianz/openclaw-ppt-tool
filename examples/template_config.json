@@ -1,0 +1,20 @@
+{
+    "slide_width": 13.333,
+    "slide_height": 7.5,
+    "primary_color": "#2c3e50",
+    "secondary_color": "#3498db",
+    "text_color": "#2c3e50",
+    "background_color": "#ffffff",
+    "title_font": "Microsoft YaHei",
+    "content_font": "Microsoft YaHei",
+    "title_size": 36,
+    "subtitle_size": 24,
+    "body_size": 20,
+    "margin_left": 0.8,
+    "margin_right": 0.8,
+    "margin_top": 0.8,
+    "margin_bottom": 0.8,
+    "max_chars_per_line": 45,
+    "max_lines_per_slide": 10,
+    "line_spacing": 1.3
+}

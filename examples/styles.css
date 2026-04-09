@@ -1,0 +1,33 @@
+/* PPT样式配置 */
+
+/* 全局样式 */
+.slide {
+    background-color: #ffffff;
+    color: #2c3e50;
+    font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+}
+
+/* 标题样式 */
+.title {
+    color: #2c3e50;
+    font-size: 36px;
+    font-weight: bold;
+}
+
+/* 副标题样式 */
+.subtitle {
+    color: #3498db;
+    font-size: 24px;
+}
+
+/* 正文样式 */
+.content {
+    color: #34495e;
+    font-size: 20px;
+    line-height: 1.5;
+}
+
+/* 强调色 */
+.accent {
+    color: #e74c3c;
+}

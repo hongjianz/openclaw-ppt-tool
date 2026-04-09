@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# PPT输出文件(保留目录但忽略文件)
+output/*.pptx
+*.pptx
+!output/.gitkeep
+
+# 临时文件
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OpenClaw
+.lingma/
+
+# 生成的背景图片(可选,建议不提交大文件)
+templates/*.png
+templates/*.jpg
+!templates/.gitkeep
+
+# 敏感信息
+.env
+*.secret

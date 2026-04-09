@@ -1,0 +1,22 @@
+{
+    "slide_width": 13.333,
+    "slide_height": 7.5,
+    "style_name": "QuintenStyle",
+    "use_gradient_background": true,
+    "primary_color": "#FFFFFF",
+    "secondary_color": "#E0E0E0",
+    "text_color": "#FFFFFF",
+    "background_color": "#267878",
+    "title_font": "Microsoft YaHei",
+    "content_font": "Microsoft YaHei",
+    "title_size": 36,
+    "subtitle_size": 24,
+    "body_size": 20,
+    "margin_left": 0.8,
+    "margin_right": 0.8,
+    "margin_top": 0.8,
+    "margin_bottom": 0.8,
+    "max_chars_per_line": 45,
+    "max_lines_per_slide": 10,
+    "line_spacing": 1.3
+}
