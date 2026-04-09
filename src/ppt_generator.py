@@ -5,6 +5,7 @@ PPT生成核心模块 - 使用python-pptx生成演示文稿
 
 import os
 import re
+import urllib.request
 from typing import List, Optional
 from pptx import Presentation
 from pptx.util import Inches, Pt
@@ -178,6 +179,85 @@ class PPTGenerator:
                             else:
                                 paragraph.alignment = PP_ALIGN.LEFT
 
+    def _download_image(self, url: str) -> Optional[str]:
+        """
+        下载图片到临时目录
+
+        Args:
+            url: 图片URL
+
+        Returns:
+            本地文件路径或None
+        """
+        try:
+            # 创建缓存目录
+            cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'image_cache')
+            os.makedirs(cache_dir, exist_ok=True)
+
+            # 生成文件名
+            filename = re.sub(r'[^\w\-_\.]', '_', url.split('/')[-1]) or 'image.png'
+            local_path = os.path.join(cache_dir, filename)
+
+            # 如果已存在,直接返回
+            if os.path.exists(local_path):
+                return local_path
+
+            # 下载图片
+            print(f"  下载图片: {url}")
+            urllib.request.urlretrieve(url, local_path)
+            return local_path
+
+        except Exception as e:
+            print(f"  警告: 图片下载失败 {url}: {e}")
+            return None
+
+    def _add_image(self, slide, img_path: str, left, top, max_width) -> float:
+        """
+        添加图片到幻灯片
+
+        Args:
+            slide: 幻灯片对象
+            img_path: 图片路径或URL
+            left: 左边距
+            top: 顶部位置
+            max_width: 最大宽度
+
+        Returns:
+            图片实际高度
+        """
+        # 检查是否为URL
+        if img_path.startswith('http://') or img_path.startswith('https://'):
+            local_path = self._download_image(img_path)
+            if not local_path:
+                return 0.0
+            img_path = local_path
+
+        # 检查文件是否存在
+        if not os.path.exists(img_path):
+            print(f"  警告: 图片不存在: {img_path}")
+            return 0.0
+
+        try:
+            # 添加图片
+            pic = slide.shapes.add_picture(img_path, left, top)
+
+            # 计算缩放比例
+            scale = min(max_width / pic.width, 1.0)
+            new_width = int(pic.width * scale)
+            new_height = int(pic.height * scale)
+
+            # 调整图片大小
+            pic.width = new_width
+            pic.height = new_height
+
+            # 返回英寸高度
+            height_inches = new_height / 914400  # EMU to inches
+            return height_inches
+
+        except Exception as e:
+            print(f"  警告: 图片插入失败: {e}")
+            return 0.0
+
     def add_title_slide(self, title: str, subtitle: str = ""):
         """添加标题页"""
         slide_layout = self.prs.slide_layouts[6]  # 空白布局
@@ -283,8 +363,14 @@ class PPTGenerator:
 
             current_top += subtitle_height + Inches(0.2)
 
+        # 添加图片
+        if slide_content.images:
+            for img_path in slide_content.images:
+                img_height = self._add_image(slide, img_path, margin_left, current_top, available_width)
+                current_top += img_height + Inches(0.3)
+
         # 添加表格
-        if slide_content.table:
+        elif slide_content.table:
             table_top = current_top
             self._add_table(slide, slide_content.table, margin_left, table_top, available_width)
             current_top += Inches(3.0)  # 表格占用高度
