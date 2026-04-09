@@ -172,6 +172,10 @@ def safe_generate_ppt(generator, content, output_path: str) -> bool:
 
     except Exception as e:
         logger.error(f"PPT生成失败: {e}")
+        
+        # 打印详细堆栈跟踪用于调试
+        import traceback
+        logger.debug(traceback.format_exc())
 
         # 尝试保存部分成果
         partial_path = output_path.replace('.pptx', '_partial.pptx')

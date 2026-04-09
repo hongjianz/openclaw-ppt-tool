@@ -440,6 +440,10 @@ class PPTGenerator:
         if slide_content.table:
             table_top = current_top
             table_height = self._add_table(slide, slide_content.table, margin_left, table_top, available_width)
+            # 确保table_height是数值类型
+            if not isinstance(table_height, (int, float)):
+                print(f"警告: _add_table返回了非数值类型: {type(table_height)}")
+                table_height = 0.0
             current_top += Inches(table_height) + Inches(0.3)  # 使用实际高度
 
         # 添加项目符号列表
