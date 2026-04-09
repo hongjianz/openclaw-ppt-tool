@@ -72,7 +72,18 @@ def parse_markdown(content: str) -> PresentationContent:
 
         # 跳过空行
         if not line:
-            in_table = False
+            # 如果之前在解析表格,空行表示表格结束
+            if in_table and table_headers:
+                current_slide.table = TableData(
+                    headers=table_headers,
+                    rows=table_rows,
+                    alignment=table_alignment
+                )
+                in_table = False
+                table_headers = []
+                table_rows = []
+                table_alignment = []
+                prev_line_was_separator = False
             continue
 
         # 水平分隔线 - 新页面
