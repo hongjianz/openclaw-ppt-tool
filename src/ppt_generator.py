@@ -332,18 +332,22 @@ class PPTGenerator:
 
         self.set_background(slide)
 
-        # 计算可用区域
-        margin_left = Inches(self.config.margin_left)
-        margin_right = Inches(self.config.margin_right)
-        margin_top = Inches(self.config.margin_top)
-        available_width = self.prs.slide_width - margin_left - margin_right
-        available_height = self.prs.slide_height - margin_top - Inches(self.config.margin_bottom)
+        # 计算可用区域（统一使用浮点数，单位：英寸）
+        margin_left = self.config.margin_left
+        margin_right = self.config.margin_right
+        margin_top = self.config.margin_top
+        margin_bottom = self.config.margin_bottom
+        
+        slide_width = self.prs.slide_width.inches if hasattr(self.prs.slide_width, 'inches') else (self.prs.slide_width / 914400)
+        slide_height = self.prs.slide_height.inches if hasattr(self.prs.slide_height, 'inches') else (self.prs.slide_height / 914400)
+        
+        available_width = slide_width - margin_left - margin_right
 
         # 添加标题
-        title_height = Inches(1.5)
+        title_height = 1.5
         title_box = slide.shapes.add_textbox(
-            margin_left, margin_top,
-            available_width, title_height
+            Inches(margin_left), Inches(margin_top),
+            Inches(available_width), Inches(title_height)
         )
         title_frame = title_box.text_frame
         title_frame.word_wrap = True
@@ -359,11 +363,11 @@ class PPTGenerator:
 
         # 添加副标题
         if subtitle:
-            subtitle_top = margin_top + title_height + Inches(0.3)
-            subtitle_height = Inches(1.0)
+            subtitle_top = margin_top + title_height + 0.3
+            subtitle_height = 1.0
             subtitle_box = slide.shapes.add_textbox(
-                margin_left, subtitle_top,
-                available_width, subtitle_height
+                Inches(margin_left), Inches(subtitle_top),
+                Inches(available_width), Inches(subtitle_height)
             )
             sub_frame = subtitle_box.text_frame
             sub_frame.word_wrap = True
@@ -382,26 +386,26 @@ class PPTGenerator:
 
         self.set_background(slide)
 
-        # 计算可用区域
-        margin_left = Inches(self.config.margin_left)
-        margin_right = Inches(self.config.margin_right)
-        margin_top = Inches(self.config.margin_top)
-        margin_bottom = Inches(self.config.margin_bottom)
+        # 计算可用区域（统一使用浮点数，单位：英寸）
+        margin_left = self.config.margin_left  # 已经是浮点数
+        margin_right = self.config.margin_right
+        margin_top = self.config.margin_top
+        margin_bottom = self.config.margin_bottom
         
-        # 将slide_width/slide_height转换为Inches后再计算
-        slide_width_inches = self.prs.slide_width.inches if hasattr(self.prs.slide_width, 'inches') else Inches(self.prs.slide_width / 914400)
-        slide_height_inches = self.prs.slide_height.inches if hasattr(self.prs.slide_height, 'inches') else Inches(self.prs.slide_height / 914400)
+        # 获取幻灯片尺寸（转换为浮点数英寸）
+        slide_width = self.prs.slide_width.inches if hasattr(self.prs.slide_width, 'inches') else (self.prs.slide_width / 914400)
+        slide_height = self.prs.slide_height.inches if hasattr(self.prs.slide_height, 'inches') else (self.prs.slide_height / 914400)
         
-        available_width = slide_width_inches - margin_left - margin_right
-        available_height = slide_height_inches - margin_top - margin_bottom
+        available_width = slide_width - margin_left - margin_right
+        available_height = slide_height - margin_top - margin_bottom
 
-        current_top = margin_top
+        current_top = margin_top  # 浮点数
 
         # 添加标题
-        title_height = Inches(0.8)
+        title_height = 0.8  # 英寸（浮点数）
         title_box = slide.shapes.add_textbox(
-            margin_left, current_top,
-            available_width, title_height
+            Inches(margin_left), Inches(current_top),
+            Inches(available_width), Inches(title_height)
         )
         title_frame = title_box.text_frame
         title_frame.word_wrap = True
@@ -414,14 +418,14 @@ class PPTGenerator:
         p.font.color.rgb = safe_color(self.config.primary_color, "#FFFFFF")
         p.alignment = PP_ALIGN.LEFT
 
-        current_top += title_height + Inches(0.2)
+        current_top += title_height + 0.2
 
         # 添加副标题
         if slide_content.subtitle:
-            subtitle_height = Inches(0.5)
+            subtitle_height = 0.5
             subtitle_box = slide.shapes.add_textbox(
-                margin_left, current_top,
-                available_width, subtitle_height
+                Inches(margin_left), Inches(current_top),
+                Inches(available_width), Inches(subtitle_height)
             )
             sub_frame = subtitle_box.text_frame
             sub_frame.word_wrap = True
@@ -433,13 +437,13 @@ class PPTGenerator:
             p.font.color.rgb = safe_color(self.config.secondary_color, "#E0E0E0")
             p.alignment = PP_ALIGN.LEFT
 
-            current_top += subtitle_height + Inches(0.2)
+            current_top += subtitle_height + 0.2
 
         # 添加图片
         if slide_content.images:
             for img_path in slide_content.images:
                 img_height = self._add_image(slide, img_path, margin_left, current_top, available_width)
-                current_top += img_height + Inches(0.3)
+                current_top += img_height + 0.3
 
         # 添加表格
         if slide_content.table:
@@ -449,20 +453,20 @@ class PPTGenerator:
             if not isinstance(table_height, (int, float)):
                 print(f"警告: _add_table返回了非数值类型: {type(table_height)}")
                 table_height = 0.0
-            current_top += Inches(table_height) + Inches(0.3)  # 使用实际高度
+            current_top += table_height + 0.3
 
         # 添加项目符号列表
         if slide_content.bullet_points:
-            # 计算剩余可用高度
+            # 计算剩余可用高度（浮点数）
             remaining_height = available_height - (current_top - margin_top)
 
-            # 如果剩余空间不足，跳过（智能分页应该已经处理了）
-            if remaining_height < Inches(1.0):
+            # 如果剩余空间不足，跳过
+            if remaining_height < 1.0:
                 print(f"警告: 页面空间不足，跳过 {len(slide_content.bullet_points)} 个列表项")
             else:
                 bullet_box = slide.shapes.add_textbox(
-                    margin_left, current_top,
-                    available_width, remaining_height
+                    Inches(margin_left), Inches(current_top),
+                    Inches(available_width), Inches(remaining_height)
                 )
                 bullet_frame = bullet_box.text_frame
                 bullet_frame.word_wrap = True
@@ -492,9 +496,9 @@ class PPTGenerator:
                     p.space_before = Pt(6)
                     p.space_after = Pt(6)
 
-                # 更新当前位置（估算列表占用高度）
+                # 更新当前位置（估算列表占用高度，浮点数）
                 list_height = len(slide_content.bullet_points) * (self.config.body_size / 72.0 * self.config.line_spacing + 0.1)
-                current_top += Inches(list_height)
+                current_top += list_height
 
         # 添加普通文本内容
         if slide_content.content_lines:
@@ -502,30 +506,27 @@ class PPTGenerator:
             full_text = ' '.join(slide_content.content_lines)
 
             # 计算文本实际占用高度
-            # available_width可能是Inches对象或浮点数
-            avail_width_inches = available_width.inches if hasattr(available_width, 'inches') else available_width
             text_height = calculate_text_height(
                 full_text,
                 self.config.body_size,
                 self.config.line_spacing,
-                avail_width_inches
+                available_width  # 已经是浮点数
             )
 
-            # 计算剩余可用高度
+            # 计算剩余可用高度（浮点数）
             remaining_height = available_height - (current_top - margin_top)
 
             # 如果文本会超出页面，截断并给出警告
-            remaining_height_inches = remaining_height.inches if hasattr(remaining_height, 'inches') else remaining_height
-            if text_height > remaining_height_inches:
-                print(f"警告: 文本内容超出页面空间 ({text_height:.2f}\" > {remaining_height_inches:.2f}\")")
+            if text_height > remaining_height:
+                print(f"警告: 文本内容超出页面空间 ({text_height:.2f}\" > {remaining_height:.2f}\")")
                 # 仍然添加，但限制高度
-                text_height_to_use = min(text_height, remaining_height_inches)
+                text_height_to_use = min(text_height, remaining_height)
             else:
                 text_height_to_use = text_height
 
             content_box = slide.shapes.add_textbox(
-                margin_left, current_top,
-                available_width, Inches(text_height_to_use)
+                Inches(margin_left), Inches(current_top),
+                Inches(available_width), Inches(text_height_to_use)
             )
             content_frame = content_box.text_frame
             content_frame.word_wrap = True
@@ -547,31 +548,30 @@ class PPTGenerator:
                 p.space_before = Pt(6)
                 p.space_after = Pt(6)
 
-            # 更新当前位置
-            current_top += Inches(text_height_to_use)
+            # 更新当前位置（浮点数）
+            current_top += text_height_to_use
 
         # 添加代码块
         if slide_content.code_blocks:
             for code_block in slide_content.code_blocks:
                 remaining_height = available_height - (current_top - margin_top)
 
-                remaining_height_val = remaining_height.inches if hasattr(remaining_height, 'inches') else remaining_height
-                if remaining_height_val < 1.0:
+                if remaining_height < 1.0:
                     print(f"警告: 页面空间不足，跳过代码块")
                     break
 
-                # 计算代码块高度
+                # 计算代码块高度（浮点数）
                 code_lines_count = len(code_block.content.split('\n'))
-                code_height = code_lines_count * (Pt(12) / 72.0 * 1.1) + 0.3  # 等宽字体稍小，加边距
+                code_height = code_lines_count * (12 / 72.0 * 1.1) + 0.3
 
-                if code_height > remaining_height_val:
+                if code_height > remaining_height:
                     print(f"警告: 代码块超出页面空间")
-                    code_height = remaining_height_val
+                    code_height = remaining_height
 
                 # 创建代码框
                 code_box = slide.shapes.add_textbox(
-                    margin_left, current_top,
-                    available_width, Inches(code_height)
+                    Inches(margin_left), Inches(current_top),
+                    Inches(available_width), Inches(code_height)
                 )
                 code_frame = code_box.text_frame
                 code_frame.word_wrap = True
@@ -592,7 +592,7 @@ class PPTGenerator:
                     paragraph.font.size = Pt(12)
                     paragraph.font.color.rgb = safe_color("#E0E0E0", "#FFFFFF")
 
-                current_top += Inches(code_height) + Inches(0.2)
+                current_top += code_height + 0.2
 
     def _split_text_into_paragraphs(self, text: str) -> List[str]:
         """
@@ -702,15 +702,17 @@ class PPTGenerator:
 
         footer_text = " | ".join(footer_parts)
 
-        # 计算页脚位置
-        margin_bottom = Inches(self.config.margin_bottom)
-        footer_height = Inches(0.4)
-        footer_top = self.prs.slide_height - margin_bottom - footer_height
+        # 计算页脚位置（使用浮点数）
+        margin_bottom = self.config.margin_bottom
+        footer_height = 0.4
+        
+        slide_height = self.prs.slide_height.inches if hasattr(self.prs.slide_height, 'inches') else (self.prs.slide_height / 914400)
+        footer_top = slide_height - margin_bottom - footer_height
 
         # 创建页脚文本框
         footer_box = slide.shapes.add_textbox(
-            Inches(0.5), footer_top,
-            self.prs.slide_width - Inches(1.0), footer_height
+            Inches(0.5), Inches(footer_top),
+            Inches(slide_height - 1.0), Inches(footer_height)
         )
         footer_frame = footer_box.text_frame
         footer_frame.word_wrap = True
