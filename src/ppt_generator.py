@@ -152,10 +152,16 @@ class PPTGenerator:
                 paragraph.font.color.rgb = safe_color("#1A4D4D", "#FFFFFF")
                 paragraph.alignment = PP_ALIGN.CENTER
 
-            # 设置表头背景
+            # 设置表头背景（半透明）
             fill = cell.fill
             fill.solid()
-            fill.fore_color.rgb = safe_color("rgba(180, 205, 190, 0.85)", "#B0C5BE")
+            fill.fore_color.rgb = safe_color("rgba(180, 205, 190, 0.5)", "#B0C5BE")
+            fill.transparency = 0.5  # 50%透明度
+
+            # 设置表头边框（更粗）
+            for border in [cell.border_top, cell.border_bottom, cell.border_left, cell.border_right]:
+                border.width = Pt(2.5)  # 加粗边框
+                border.color.rgb = safe_color("#1A4D4D", "#666666")
 
         # 设置数据行
         for row_idx, row_data in enumerate(table_data.rows, 1):
@@ -178,6 +184,30 @@ class PPTGenerator:
                                 paragraph.alignment = PP_ALIGN.RIGHT
                             else:
                                 paragraph.alignment = PP_ALIGN.LEFT
+
+                    # 数据单元格背景透明
+                    fill = cell.fill
+                    fill.background()  # 设置为背景色（透明）
+
+                    # 设置数据单元格边框（较细）
+                    for border in [cell.border_top, cell.border_bottom, cell.border_left, cell.border_right]:
+                        border.width = Pt(1.5)
+                        border.color.rgb = safe_color("#2A5D5D", "#999999")
+
+        # 设置表格整体边框（最外层加粗）
+        for row_idx in range(rows):
+            for col_idx in range(cols):
+                cell = table.cell(row_idx, col_idx)
+                # 第一行和最后一行的上下边框加粗
+                if row_idx == 0:
+                    cell.border_top.width = Pt(3.0)
+                if row_idx == rows - 1:
+                    cell.border_bottom.width = Pt(3.0)
+                # 第一列和最后一列的左右边框加粗
+                if col_idx == 0:
+                    cell.border_left.width = Pt(3.0)
+                if col_idx == cols - 1:
+                    cell.border_right.width = Pt(3.0)
 
     def _download_image(self, url: str) -> Optional[str]:
         """
