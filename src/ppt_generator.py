@@ -370,13 +370,13 @@ class PPTGenerator:
                 current_top += img_height + Inches(0.3)
 
         # 添加表格
-        elif slide_content.table:
+        if slide_content.table:
             table_top = current_top
             self._add_table(slide, slide_content.table, margin_left, table_top, available_width)
             current_top += Inches(3.0)  # 表格占用高度
 
         # 添加项目符号列表
-        elif slide_content.bullet_points:
+        if slide_content.bullet_points:
             remaining_height = available_height - (current_top - margin_top)
             bullet_box = slide.shapes.add_textbox(
                 margin_left, current_top,
@@ -401,7 +401,7 @@ class PPTGenerator:
                 p.space_after = Pt(6)
 
         # 添加普通文本内容
-        elif slide_content.content_lines:
+        if slide_content.content_lines:
             remaining_height = available_height - (current_top - margin_top)
             content_box = slide.shapes.add_textbox(
                 margin_left, current_top,

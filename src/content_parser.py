@@ -94,11 +94,18 @@ def parse_markdown(content: str) -> PresentationContent:
             continue
 
         # 检测Markdown表格
-        if '|' in line and not line.startswith('#') and not line.startswith('- '):
-            # 检查是否是表头分隔行 (|---|---|)
-            if re.match(r'^[\s|:-]+$', line.replace('-', '').replace('|', '')):
-                # 解析对齐方式
-                parts = [p.strip() for p in line.split('|') if p.strip()]
+        if '|' in line and not line.startswith('#') and not line.startswith('- ') and not line.startswith('* '):
+            # 检查是否是表头分隔行 (|---|---| 或 |:---|:---:)
+            separator_match = re.match(r'^[\s|:\-]+$', line)
+            if separator_match and all(c in ' |-:' for c in line):
+                # 这是表格分隔行,解析对齐方式
+                parts = [p.strip() for p in line.split('|')]
+                # 移除首尾空元素
+                if parts and parts[0] == '':
+                    parts = parts[1:]
+                if parts and parts[-1] == '':
+                    parts = parts[:-1]
+                
                 table_alignment = []
                 for part in parts:
                     if part.startswith(':') and part.endswith(':'):
@@ -108,7 +115,6 @@ def parse_markdown(content: str) -> PresentationContent:
                     else:
                         table_alignment.append('left')
                 prev_line_was_separator = True
-                i += 1
                 continue
 
             # 表格行
