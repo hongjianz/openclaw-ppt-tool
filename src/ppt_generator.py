@@ -327,10 +327,10 @@ class PPTGenerator:
             img_path: 图片路径或URL
             left: 左边距
             top: 顶部位置
-            max_width: 最大宽度
+            max_width: 最大宽度（英寸）
 
         Returns:
-            图片实际高度
+            图片实际高度（英寸）
         """
         # 检查是否为URL
         if img_path.startswith('http://') or img_path.startswith('https://'):
@@ -348,18 +348,21 @@ class PPTGenerator:
             # 添加图片
             pic = slide.shapes.add_picture(img_path, left, top)
 
-            # 计算缩放比例
-            scale = min(max_width / pic.width, 1.0)
-            new_width = int(pic.width * scale)
-            new_height = int(pic.height * scale)
+            # 统一单位为英寸后再计算缩放比例
+            pic_width_inches = pic.width / 914400  # EMU to inches
+            pic_height_inches = pic.height / 914400  # EMU to inches
 
-            # 调整图片大小
-            pic.width = new_width
-            pic.height = new_height
+            # 计算缩放比例（max_width 已经是英寸单位）
+            scale = min(max_width / pic_width_inches, 1.0)
+            new_width_inches = pic_width_inches * scale
+            new_height_inches = pic_height_inches * scale
+
+            # 调整图片大小（需要转换回 EMU）
+            pic.width = int(new_width_inches * 914400)
+            pic.height = int(new_height_inches * 914400)
 
             # 返回英寸高度
-            height_inches = new_height / 914400  # EMU to inches
-            return height_inches
+            return new_height_inches
 
         except Exception as e:
             print(f"  警告: 图片插入失败: {e}")
