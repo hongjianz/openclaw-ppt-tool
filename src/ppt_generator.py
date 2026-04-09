@@ -49,6 +49,49 @@ def safe_color(color_str: str, default: str = "#333333") -> RGBColor:
     return hex_to_rgb(default)
 
 
+def apply_bold_formatting(paragraph, text: str):
+    """
+    应用Markdown加粗格式到段落
+
+    Args:
+        paragraph: pptx段落对象
+        text: 可能包含**text**语法的文本
+    """
+    # 检测是否包含加粗语法
+    if '**' not in text and '__' not in text:
+        # 没有加粗语法，直接设置文本
+        paragraph.text = text
+        return
+
+    # 清除现有内容
+    for run in paragraph.runs:
+        run.text = ""
+
+    # 使用正则表达式分割文本
+    import re
+    parts = re.split(r'(\*\*.*?\*\*|__.*?__)', text)
+
+    for part in parts:
+        if not part:
+            continue
+
+        # 检查是否为加粗部分
+        is_bold = False
+        clean_text = part
+
+        if part.startswith('**') and part.endswith('**'):
+            is_bold = True
+            clean_text = part[2:-2]
+        elif part.startswith('__') and part.endswith('__'):
+            is_bold = True
+            clean_text = part[2:-2]
+
+        # 添加run
+        run = paragraph.add_run()
+        run.text = clean_text
+        run.font.bold = is_bold
+
+
 def calculate_text_height(text: str, font_size_pt: float, line_spacing: float = 1.2, max_width_inches: float = 10.0) -> float:
     """
     计算文本实际占用高度（英寸）
@@ -65,18 +108,34 @@ def calculate_text_height(text: str, font_size_pt: float, line_spacing: float = 
     if not text:
         return 0.0
 
-    # 估算每行字符数（中文字符约占2个英文字符宽度）
-    # 假设平均每个字符宽度为 font_size * 0.6 英寸
-    char_width = font_size_pt / 72.0 * 0.6  # 转换为英寸
-    chars_per_line = max(int(max_width_inches / char_width), 1)
+    # 更准确的文本高度估算
+    # 中文字体：约10字/英寸（18pt字体）
+    # 英文字体：约15-20字符/英寸
+    # 根据字体大小调整
+    base_chars_per_inch = 10  # 中文基准
+    scale_factor = 18.0 / font_size_pt  # 字体越小，每行字符越多
+    chars_per_line = int(max_width_inches * base_chars_per_inch * scale_factor)
+    chars_per_line = max(chars_per_line, 1)
 
-    # 计算需要的行数
-    lines_needed = len(text) / chars_per_line
-    lines_needed = max(lines_needed, 1)  # 至少1行
+    # 按换行符分割，计算实际行数
+    lines = text.split('\n')
+    total_lines = 0
+    for line in lines:
+        if not line.strip():
+            total_lines += 1  # 空行也算一行
+        else:
+            # 计算该行需要的行数
+            line_chars = len(line)
+            lines_for_this = max(1, (line_chars + chars_per_line - 1) // chars_per_line)
+            total_lines += lines_for_this
 
-    # 计算总高度：行数 * (字体大小 + 行间距)
-    line_height = font_size_pt / 72.0 * line_spacing
-    total_height = lines_needed * line_height
+    # 计算总高度：行数 * (字体大小 / 72 * 行间距)
+    line_height_inches = (font_size_pt / 72.0) * line_spacing
+    total_height = total_lines * line_height_inches
+
+    # 添加额外边距（段落间距）
+    paragraph_count = len([l for l in lines if l.strip()])
+    total_height += paragraph_count * 0.1  # 每段额外0.1英寸
 
     return total_height
 
@@ -167,12 +226,12 @@ class PPTGenerator:
         if rows == 0 or cols == 0:
             return 0.0
 
-        # 计算行高
-        row_height = Inches(0.5)
-        height = row_height * rows
+        # 计算行高（统一使用浮点数）
+        row_height_inches = 0.5  # 每行0.5英寸
+        height_inches = row_height_inches * rows
 
-        # 添加表格
-        table_shape = slide.shapes.add_table(rows, cols, left, top, width, height)
+        # 添加表格（API调用时转为Inches对象）
+        table_shape = slide.shapes.add_table(rows, cols, left, top, width, Inches(height_inches))
         table = table_shape.table
 
         # 设置表头
@@ -187,16 +246,12 @@ class PPTGenerator:
                 paragraph.font.color.rgb = safe_color("#1A4D4D", "#FFFFFF")
                 paragraph.alignment = PP_ALIGN.CENTER
 
-            # 设置表头背景（半透明）
+            # 设置表头背景（使用纯色，因为transparency可能不支持）
             fill = cell.fill
             fill.solid()
-            fill.fore_color.rgb = safe_color("rgba(180, 205, 190, 0.5)", "#B0C5BE")
-            fill.transparency = 0.5  # 50%透明度
-
-            # 设置表头边框（更粗）
-            for border in [cell.border_top, cell.border_bottom, cell.border_left, cell.border_right]:
-                border.width = Pt(2.5)  # 加粗边框
-                border.color.rgb = safe_color("#1A4D4D", "#666666")
+            fill.fore_color.rgb = safe_color("#B0C5BE", "#B0C5BE")
+            # 注意：fill.transparency 在某些python-pptx版本中可能不可用
+            # 如需透明度，建议使用浅色背景代替
 
         # 设置数据行
         for row_idx, row_data in enumerate(table_data.rows, 1):
@@ -224,27 +279,11 @@ class PPTGenerator:
                     fill = cell.fill
                     fill.background()  # 设置为背景色（透明）
 
-                    # 设置数据单元格边框（较细）
-                    for border in [cell.border_top, cell.border_bottom, cell.border_left, cell.border_right]:
-                        border.width = Pt(1.5)
-                        border.color.rgb = safe_color("#2A5D5D", "#999999")
+                    # 注意：python-pptx不支持直接设置单元格边框属性
+                    # 如需边框效果，建议使用表格外框或背景色区分
 
-        # 设置表格整体边框（最外层加粗）
-        for row_idx in range(rows):
-            for col_idx in range(cols):
-                cell = table.cell(row_idx, col_idx)
-                # 第一行和最后一行的上下边框加粗
-                if row_idx == 0:
-                    cell.border_top.width = Pt(3.0)
-                if row_idx == rows - 1:
-                    cell.border_bottom.width = Pt(3.0)
-                # 第一列和最后一列的左右边框加粗
-                if col_idx == 0:
-                    cell.border_left.width = Pt(3.0)
-                if col_idx == cols - 1:
-                    cell.border_right.width = Pt(3.0)
-
-        return height.inches
+        # 返回表格高度（浮点数英寸值）
+        return height_inches
 
     def _download_image(self, url: str) -> Optional[str]:
         """
@@ -387,17 +426,22 @@ class PPTGenerator:
         self.set_background(slide)
 
         # 计算可用区域（统一使用浮点数，单位：英寸）
-        margin_left = self.config.margin_left  # 已经是浮点数
-        margin_right = self.config.margin_right
-        margin_top = self.config.margin_top
-        margin_bottom = self.config.margin_bottom
-        
+        margin_left = float(self.config.margin_left)
+        margin_right = float(self.config.margin_right)
+        margin_top = float(self.config.margin_top)
+        margin_bottom = float(self.config.margin_bottom)
+
         # 获取幻灯片尺寸（转换为浮点数英寸）
-        slide_width = self.prs.slide_width.inches if hasattr(self.prs.slide_width, 'inches') else (self.prs.slide_width / 914400)
-        slide_height = self.prs.slide_height.inches if hasattr(self.prs.slide_height, 'inches') else (self.prs.slide_height / 914400)
-        
+        slide_width = float(self.prs.slide_width.inches) if hasattr(self.prs.slide_width, 'inches') else float(self.prs.slide_width / 914400)
+        slide_height = float(self.prs.slide_height.inches) if hasattr(self.prs.slide_height, 'inches') else float(self.prs.slide_height / 914400)
+
         available_width = slide_width - margin_left - margin_right
         available_height = slide_height - margin_top - margin_bottom
+
+        # 安全检查：确保可用高度为正数
+        if available_height <= 0:
+            print(f"警告：页面空间不足 (available_height={available_height:.2f}\")")
+            return
 
         current_top = margin_top  # 浮点数
 
@@ -480,10 +524,12 @@ class PPTGenerator:
 
                     # 检测是否为二级目录项（以 • 开头且前面有空格）
                     is_subitem = point.strip().startswith('•') or point.startswith('   ')
-                    
-                    p.text = point.strip()
+
+                    # 应用Markdown加粗格式
+                    apply_bold_formatting(p, point.strip())
+
                     p.font.name = self.config.content_font
-                    
+
                     # 二级标题使用较小字体
                     if is_subitem:
                         p.font.size = Pt(self.config.body_size - 4)
@@ -491,7 +537,7 @@ class PPTGenerator:
                     else:
                         p.font.size = Pt(self.config.body_size)
                         p.level = 0
-                    
+
                     p.font.color.rgb = safe_color(self.config.text_color, "#FFFFFF")
                     p.space_before = Pt(6)
                     p.space_after = Pt(6)
@@ -541,7 +587,10 @@ class PPTGenerator:
                 else:
                     p = content_frame.add_paragraph()
 
-                p.text = paragraph
+                # 应用Markdown加粗格式
+                apply_bold_formatting(p, paragraph)
+
+                # 设置字体属性（注意：apply_bold_formatting可能已经设置了部分run的bold）
                 p.font.name = self.config.content_font
                 p.font.size = Pt(self.config.body_size)
                 p.font.color.rgb = safe_color(self.config.text_color, "#FFFFFF")

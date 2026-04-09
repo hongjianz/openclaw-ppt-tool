@@ -172,7 +172,7 @@ def safe_generate_ppt(generator, content, output_path: str) -> bool:
 
     except Exception as e:
         logger.error(f"PPT生成失败: {e}")
-        
+
         # 打印详细堆栈跟踪用于调试
         import traceback
         logger.error(f"详细错误信息:\n{traceback.format_exc()}")
@@ -187,6 +187,36 @@ def safe_generate_ppt(generator, content, output_path: str) -> bool:
         except Exception as save_error:
             logger.error(f"无法保存部分成果: {save_error}")
 
+        return False
+
+
+def safe_generate_slide(generator, slide_content, slide_index: int, total_slides: int):
+    """
+    安全地生成单个幻灯片
+
+    Args:
+        generator: PPT生成器实例
+        slide_content: 幻灯片内容
+        slide_index: 当前页码（从1开始）
+        total_slides: 总页数
+
+    Returns:
+        是否成功
+    """
+    try:
+        if slide_index == 1:
+            # 标题页
+            generator.add_title_slide(slide_content.title, slide_content.subtitle)
+        else:
+            # 内容页
+            generator.add_content_slide(slide_content)
+        logger.info(f"✓ 页面 {slide_index}/{total_slides} 生成成功")
+        return True
+    except Exception as e:
+        logger.error(f"✗ 页面 {slide_index}/{total_slides} 生成失败: {slide_content.title}")
+        logger.error(f"  错误详情: {e}")
+        import traceback
+        logger.debug(f"  堆栈跟踪:\n{traceback.format_exc()}")
         return False
 
 
