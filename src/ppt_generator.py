@@ -465,11 +465,21 @@ class PPTGenerator:
                     else:
                         p = bullet_frame.add_paragraph()
 
-                    p.text = point
+                    # 检测是否为二级目录项（以 • 开头且前面有空格）
+                    is_subitem = point.strip().startswith('•') or point.startswith('   ')
+                    
+                    p.text = point.strip()
                     p.font.name = self.config.content_font
-                    p.font.size = Pt(self.config.body_size)
+                    
+                    # 二级标题使用较小字体
+                    if is_subitem:
+                        p.font.size = Pt(self.config.body_size - 4)
+                        p.level = 1  # 缩进级别
+                    else:
+                        p.font.size = Pt(self.config.body_size)
+                        p.level = 0
+                    
                     p.font.color.rgb = safe_color(self.config.text_color, "#FFFFFF")
-                    p.level = 0
                     p.space_before = Pt(6)
                     p.space_after = Pt(6)
 

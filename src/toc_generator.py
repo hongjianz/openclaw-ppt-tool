@@ -21,6 +21,7 @@ class TocEntry:
     slide_index: int  # 在slides列表中的索引(从0开始)
     level: int = 1  # 标题层级: 1=主标题, 2=副标题
     subtitle: str = ""  # 副标题(可选)
+    has_hyperlink: bool = True  # 是否有超链接
 
 
 def extract_toc_entries(presentation: PresentationContent, include_subtitles: bool = True) -> List[TocEntry]:
@@ -41,12 +42,17 @@ def extract_toc_entries(presentation: PresentationContent, include_subtitles: bo
         if not slide.title or slide.title.strip() == "":
             continue
 
+        # 跳过目录页本身（避免循环）
+        if slide.title == "目录" or slide.title.endswith(" - 目录"):
+            continue
+
         # 添加主标题
         toc_entries.append(TocEntry(
             title=slide.title,
             slide_index=i,
             level=1,
-            subtitle=slide.subtitle if include_subtitles and slide.subtitle else ""
+            subtitle=slide.subtitle if include_subtitles and slide.subtitle else "",
+            has_hyperlink=True
         ))
 
     return toc_entries
@@ -70,12 +76,18 @@ def create_toc_slide(toc_entries: List[TocEntry], presentation_title: str = "") 
         bullet_points=[]
     )
 
-    # 将目录项转换为bullet points
-    for entry in toc_entries:
-        # 格式: "标题 (第X页)"
+    # 将目录项转换为bullet points，带分级缩进和页码
+    for idx, entry in enumerate(toc_entries, 1):
         page_num = entry.slide_index + 1
-        bullet_text = f"{entry.title}"
+        
+        # 一级标题：编号 + 标题 + 页码
+        bullet_text = f"{idx}. {entry.title} (第{page_num}页)"
         toc_slide.bullet_points.append(bullet_text)
+        
+        # 二级标题（副标题）：缩进显示
+        if entry.subtitle:
+            subtitle_text = f"   • {entry.subtitle}"
+            toc_slide.bullet_points.append(subtitle_text)
 
     return toc_slide
 
