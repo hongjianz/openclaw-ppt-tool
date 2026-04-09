@@ -14,6 +14,8 @@ PPT自动生成工具 - 主入口脚本
     --format          文稿格式 (markdown/plain/auto, 默认auto)
     --width           幻灯片宽度 (英寸, 默认13.333)
     --height          幻灯片高度 (英寸, 默认7.5)
+    --smart-paginate  启用智能分页(按语义单元而非字符数)
+    --max-lines       每页最大行数 (默认12)
 """
 
 import argparse
@@ -25,6 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.template_config import TemplateConfig, parse_css_to_config
 from src.content_parser import smart_parse
+from src.smart_pagination import smart_paginate
 from src.ppt_generator import PPTGenerator
 
 
@@ -59,6 +62,10 @@ def main():
                        help='幻灯片宽度 (英寸, 默认: 13.333)')
     parser.add_argument('--height', type=float, default=7.5,
                        help='幻灯片高度 (英寸, 默认: 7.5)')
+    parser.add_argument('--smart-paginate', action='store_true',
+                       help='启用智能分页(按语义单元而非字符数)')
+    parser.add_argument('--max-lines', type=int, default=None,
+                       help='每页最大行数 (默认使用配置文件)')
 
     args = parser.parse_args()
 
@@ -100,6 +107,10 @@ def main():
     config.slide_width = args.width
     config.slide_height = args.height
 
+    # 设置最大行数
+    if args.max_lines:
+        config.max_lines_per_slide = args.max_lines
+
     # 读取文稿内容
     print(f"读取文稿: {args.input}")
     with open(args.input, 'r', encoding='utf-8') as f:
@@ -109,6 +120,12 @@ def main():
     print(f"解析文稿内容 (格式: {args.format})...")
     content = smart_parse(content_text, args.format)
     print(f"解析完成: {len(content.slides)} 页内容")
+
+    # 智能分页
+    if args.smart_paginate:
+        print("执行智能分页优化...")
+        content = smart_paginate(content, config)
+        print(f"分页完成: {len(content.slides)} 页内容")
 
     # 生成PPT
     print("生成PPT...")
