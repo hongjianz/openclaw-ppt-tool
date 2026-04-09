@@ -35,6 +35,7 @@ from src.error_handler import (
     check_dependencies, print_dependency_help,
     safe_generate_ppt, graceful_exit
 )
+from src.output_callback import FeishuUploader, create_upload_callback, create_chat_send_callback
 
 
 def main():
@@ -88,6 +89,14 @@ def main():
                        help='直接传入文稿内容(无需文件)')
     parser.add_argument('--feishu-doc', type=str, default=None,
                        help='飞书文档URL或ID')
+    parser.add_argument('--upload-to-feishu', action='store_true',
+                       help='上传到飞书云空间')
+    parser.add_argument('--feishu-folder', type=str, default=None,
+                       help='飞书文件夹token')
+    parser.add_argument('--send-to-chat', type=str, default=None,
+                       help='发送到飞书聊天(chat_id)')
+    parser.add_argument('--chat-message', type=str, default=None,
+                       help='聊天消息文本')
 
     args = parser.parse_args()
 
@@ -208,10 +217,33 @@ def main():
         generator = PPTGenerator(config)
         success = safe_generate_ppt(generator, content, args.output)
 
-        if success:
-            graceful_exit("完成!", 0)
-        else:
+        if not success:
             graceful_exit("PPT生成失败,请检查错误信息", 1)
+
+        # 执行输出回调
+        if args.upload_to_feishu or args.send_to_chat:
+            try:
+                uploader = FeishuUploader()
+
+                # 上传到云空间
+                if args.upload_to_feishu:
+                    callback = create_upload_callback(uploader, args.feishu_folder)
+                    callback(args.output)
+
+                # 发送到聊天
+                if args.send_to_chat:
+                    callback = create_chat_send_callback(
+                        uploader,
+                        args.send_to_chat,
+                        args.chat_message
+                    )
+                    callback(args.output)
+
+            except Exception as e:
+                print(f"警告: 回调执行失败: {e}")
+                print("但PPT文件已成功生成,可手动上传")
+
+        graceful_exit("完成!", 0)
 
     except Exception as e:
         logger.error(f"未知错误: {e}")
