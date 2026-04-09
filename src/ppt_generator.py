@@ -63,7 +63,7 @@ def calculate_text_height(text: str, font_size_pt: float, line_spacing: float = 
         文本占用的实际高度（英寸）
     """
     if not text:
-        return 0
+        return 0.0
 
     # 估算每行字符数（中文字符约占2个英文字符宽度）
     # 假设平均每个字符宽度为 font_size * 0.6 英寸
@@ -165,7 +165,7 @@ class PPTGenerator:
         cols = len(table_data.headers)
 
         if rows == 0 or cols == 0:
-            return 0
+            return 0.0
 
         # 计算行高
         row_height = Inches(0.5)
