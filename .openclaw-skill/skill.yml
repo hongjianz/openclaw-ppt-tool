@@ -1,6 +1,6 @@
 name: ppt-generator
-description: 根据文稿内容自动生成PPT演示文稿,支持Markdown和纯文本格式,可自定义背景模板和样式。内置QuintenStyle公司模板。
-version: 1.0.0
+description: 根据文稿内容自动生成PPT演示文稿。支持文件输入、直接文本传入、飞书文档读取。内置QuintenStyle公司模板。
+version: 2.0.0
 author: OpenClaw PPT Tool
 repository: https://github.com/YOUR_USERNAME/openclaw-ppt-tool
 
@@ -11,7 +11,17 @@ main: ../generate_ppt.sh
 parameters:
   - name: input
     description: 输入文稿文件路径 (Markdown或纯文本)
-    required: true
+    required: false
+    type: string
+
+  - name: content
+    description: 直接传入文稿内容(无需文件)
+    required: false
+    type: string
+
+  - name: feishu_doc
+    description: 飞书文档URL或ID
+    required: false
     type: string
 
   - name: output
@@ -25,61 +35,62 @@ parameters:
     type: string
 
   - name: config
-    description: JSON配置文件路径 (可选),可使用examples/quinten_config.json
+    description: JSON配置文件路径,可使用examples/quinten_config.json
     required: false
     type: string
 
   - name: css
-    description: CSS样式文件路径 (可选),可使用examples/quinten_style.css
+    description: CSS样式文件路径,可使用examples/quinten_style.css
     required: false
     type: string
 
-  - name: format
-    description: 文稿格式 (markdown/plain/auto)
+  - name: toc
+    description: 自动生成目录页
+    required: false
+    type: boolean
+    default: false
+
+  - name: footer
+    description: 页脚文本
     required: false
     type: string
-    default: auto
 
-  - name: width
-    description: 幻灯片宽度(英寸),默认13.333(16:9)
+  - name: smart_paginate
+    description: 启用智能分页
     required: false
-    type: number
-    default: 13.333
-
-  - name: height
-    description: 幻灯片高度(英寸),默认7.5(16:9)
-    required: false
-    type: number
-    default: 7.5
+    type: boolean
+    default: false
 
 # 使用示例
 examples:
-  - description: "基本用法"
+  - description: "从文件生成"
     command: "--input content.md --output presentation.pptx"
 
+  - description: "直接传入内容"
+    command: "--content '# 标题\n\n- 要点1\n- 要点2' --output out.pptx"
+
+  - description: "从飞书文档"
+    command: "--feishu-doc https://xxx.feishu.cn/docx/xxx --output out.pptx"
+
   - description: "使用QuintenStyle模板"
-    command: "--input content.md --output presentation.pptx --css examples/quinten_style.css"
+    command: "--input content.md --output out.pptx --css examples/quinten_style.css"
 
-  - description: "带背景图"
-    command: "--input content.md --output presentation.pptx --background bg.png"
-
-  - description: "使用JSON配置"
-    command: "--input content.txt --output out.pptx --config examples/quinten_config.json"
-
-  - description: "自定义尺寸(4:3)"
-    command: "--input content.md --output out.pptx --width 10 --height 7.5"
+  - description: "完整示例"
+    command: "--content '# 报告' --output out.pptx --toc --footer '公司名' --smart-paginate"
 
 # 依赖说明
 dependencies:
   - python3
   - python-pptx
   - Pillow
+  - requests (可选,用于飞书集成)
 
 # 安装说明
 install_instructions: |
   1. 克隆仓库: git clone https://github.com/YOUR_USERNAME/openclaw-ppt-tool.git
   2. 安装依赖: cd openclaw-ppt-tool && pip install -r requirements.txt
-  3. 测试: python main.py -i examples/sample_content.md -o output/test.pptx
+  3. (可选)飞书集成: pip install requests
+  4. 测试: python main.py -i examples/sample_content.md -o output/test.pptx
 
 # 标签
 tags:
@@ -88,3 +99,4 @@ tags:
   - document
   - generator
   - quintenstyle
+  - feishu

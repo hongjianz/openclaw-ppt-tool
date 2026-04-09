@@ -84,6 +84,10 @@ def main():
                        help='页码格式 (默认: 第 {current} / {total} 页)')
     parser.add_argument('--footer-on-title', action='store_true',
                        help='在标题页显示页脚')
+    parser.add_argument('--content', type=str, default=None,
+                       help='直接传入文稿内容(无需文件)')
+    parser.add_argument('--feishu-doc', type=str, default=None,
+                       help='飞书文档URL或ID')
 
     args = parser.parse_args()
 
@@ -93,13 +97,40 @@ def main():
         print_dependency_help(missing_deps)
         graceful_exit("请先安装缺失的依赖", 1)
 
-    # 验证输入文件
-    if not validate_input_file(args.input):
-        graceful_exit("输入文件验证失败", 1)
-
     # 验证输出路径
     if not validate_output_path(args.output):
         graceful_exit("输出路径验证失败", 1)
+
+    # 处理输入来源
+    content_text = None
+
+    # 优先级1: --content 参数直接传入内容
+    if args.content:
+        print("使用命令行传入的内容...")
+        content_text = args.content
+
+    # 优先级2: --feishu-doc 从飞书文档读取
+    elif args.feishu_doc:
+        print(f"从飞书文档读取: {args.feishu_doc}")
+        try:
+            from src.feishu_reader import FeishuDocReader
+            reader = FeishuDocReader()
+            content_text = reader.read_document(args.feishu_doc)
+            print(f"成功读取飞书文档 ({len(content_text)} 字符)")
+        except ImportError:
+            graceful_exit("错误: 飞书集成模块未安装\n运行: pip install requests", 1)
+        except Exception as e:
+            graceful_exit(f"读取飞书文档失败: {e}", 1)
+
+    # 优先级3: --input 从文件读取
+    elif args.input:
+        if not validate_input_file(args.input):
+            graceful_exit("输入文件验证失败", 1)
+        print(f"读取文稿: {args.input}")
+        with open(args.input, 'r', encoding='utf-8') as f:
+            content_text = f.read()
+    else:
+        graceful_exit("错误: 请指定 --input、--content 或 --feishu-doc", 1)
 
     # 加载配置
     config = None
