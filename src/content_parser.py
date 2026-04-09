@@ -39,6 +39,7 @@ class PresentationContent:
     """完整演示文稿内容"""
     title: str = ""
     slides: List[SlideContent] = field(default_factory=list)
+    auto_toc: bool = False  # 是否自动生成目录
 
 
 def parse_markdown(content: str) -> PresentationContent:

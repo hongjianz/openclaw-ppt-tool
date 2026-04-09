@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from src.template_config import TemplateConfig, parse_css_to_config
 from src.content_parser import smart_parse
 from src.smart_pagination import smart_paginate
+from src.toc_generator import insert_toc_at_beginning
 from src.ppt_generator import PPTGenerator
 
 
@@ -66,6 +67,10 @@ def main():
                        help='启用智能分页(按语义单元而非字符数)')
     parser.add_argument('--max-lines', type=int, default=None,
                        help='每页最大行数 (默认使用配置文件)')
+    parser.add_argument('--toc', action='store_true',
+                       help='自动生成目录页')
+    parser.add_argument('--no-subtitles-in-toc', action='store_true',
+                       help='目录中不包含副标题')
 
     args = parser.parse_args()
 
@@ -126,6 +131,13 @@ def main():
         print("执行智能分页优化...")
         content = smart_paginate(content, config)
         print(f"分页完成: {len(content.slides)} 页内容")
+
+    # 生成目录页
+    if args.toc:
+        print("生成目录页...")
+        include_subtitles = not args.no_subtitles_in_toc
+        content = insert_toc_at_beginning(content, include_subtitles)
+        print(f"目录页已添加: 共 {len(content.slides)} 页")
 
     # 生成PPT
     print("生成PPT...")
