@@ -528,6 +528,49 @@ class PPTGenerator:
             # 更新当前位置
             current_top += Inches(text_height_to_use)
 
+        # 添加代码块
+        if slide_content.code_blocks:
+            for code_block in slide_content.code_blocks:
+                remaining_height = available_height - (current_top - margin_top)
+
+                if remaining_height < Inches(1.0):
+                    print(f"警告: 页面空间不足，跳过代码块")
+                    break
+
+                # 计算代码块高度
+                code_lines_count = len(code_block.content.split('\n'))
+                code_height = code_lines_count * (Pt(12) / 72.0 * 1.1) + 0.3  # 等宽字体稍小，加边距
+
+                if code_height > remaining_height.inches:
+                    print(f"警告: 代码块超出页面空间")
+                    code_height = remaining_height.inches
+
+                # 创建代码框
+                code_box = slide.shapes.add_textbox(
+                    margin_left, current_top,
+                    available_width, Inches(code_height)
+                )
+                code_frame = code_box.text_frame
+                code_frame.word_wrap = True
+                code_frame.line_spacing = 1.1
+
+                # 设置背景色（深色主题）
+                code_box.fill.solid()
+                code_box.fill.fore_color.rgb = safe_color("#2D2D2D", "#F5F5F5")
+
+                # 添加代码内容
+                code_text = code_block.content
+                p = code_frame.paragraphs[0]
+                p.text = code_text
+
+                # 设置等宽字体
+                for paragraph in code_frame.paragraphs:
+                    paragraph.font.name = "Consolas" if os.name == 'nt' else "Monaco"
+                    paragraph.font.size = Pt(12)
+                    paragraph.font.color.rgb = safe_color("#E0E0E0", "#FFFFFF")
+
+                current_top += Inches(code_height) + Inches(0.2)
+
     def _split_text_into_paragraphs(self, text: str) -> List[str]:
         """
         将长文本智能分割为多个段落

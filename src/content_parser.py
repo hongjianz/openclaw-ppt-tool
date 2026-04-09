@@ -23,6 +23,14 @@ class TableData:
 
 
 @dataclass
+class CodeBlock:
+    """代码块"""
+    content: str
+    language: str = "text"  # python, java, text, flowchart, matrix等
+    is_diagram: bool = False  # 是否为图表（流程图/矩阵图）
+
+
+@dataclass
 class SlideContent:
     """单页PPT内容"""
     title: str
@@ -32,6 +40,7 @@ class SlideContent:
     table: Optional[TableData] = None  # 新增表格支持
     image_path: Optional[str] = None
     images: List[str] = field(default_factory=list)  # 支持多张图片
+    code_blocks: List[CodeBlock] = field(default_factory=list)  # 代码块
 
 
 @dataclass
@@ -52,6 +61,7 @@ def parse_markdown(content: str) -> PresentationContent:
     - - 或 * 列表项 -> 项目符号
     - | 表格 | 语法 | -> PPT表格对象
     - ![alt](url) -> 图片
+    - ``` 代码块 -> 等宽字体文本框或图表
     - 普通文本 -> 正文内容
     - --- 分隔符 -> 分页
     """
@@ -62,6 +72,11 @@ def parse_markdown(content: str) -> PresentationContent:
     table_rows = []
     table_alignment = []
     prev_line_was_separator = False
+    
+    # 代码块相关
+    in_code_block = False
+    code_lines = []
+    code_language = "text"
 
     lines = content.split('\n')
     i = 0
@@ -100,8 +115,47 @@ def parse_markdown(content: str) -> PresentationContent:
                     table_headers = []
                     table_rows = []
                     table_alignment = []
+                
+                # 如果有未保存的代码块
+                if in_code_block and code_lines:
+                    code_content = '\n'.join(code_lines)
+                    is_diagram = _is_diagram(code_content)
+                    current_slide.code_blocks.append(CodeBlock(
+                        content=code_content,
+                        language=code_language,
+                        is_diagram=is_diagram
+                    ))
+                    in_code_block = False
+                    code_lines = []
+                    
                 presentation.slides.append(current_slide)
             current_slide = SlideContent(title="", content_lines=[], bullet_points=[])
+            continue
+
+        # 检测代码块开始/结束
+        if line.startswith('```'):
+            if in_code_block:
+                # 结束代码块
+                code_content = '\n'.join(code_lines)
+                is_diagram = _is_diagram(code_content)
+                if current_slide:
+                    current_slide.code_blocks.append(CodeBlock(
+                        content=code_content,
+                        language=code_language,
+                        is_diagram=is_diagram
+                    ))
+                in_code_block = False
+                code_lines = []
+                code_language = "text"
+            else:
+                # 开始代码块
+                in_code_block = True
+                code_language = line[3:].strip() or "text"
+            continue
+        
+        # 如果在代码块内，收集代码行
+        if in_code_block:
+            code_lines.append(line)
             continue
 
         # 检测Markdown表格
@@ -215,6 +269,16 @@ def parse_markdown(content: str) -> PresentationContent:
             alignment=table_alignment
         )
 
+    # 处理最后未关闭的代码块
+    if current_slide and in_code_block and code_lines:
+        code_content = '\n'.join(code_lines)
+        is_diagram = _is_diagram(code_content)
+        current_slide.code_blocks.append(CodeBlock(
+            content=code_content,
+            language=code_language,
+            is_diagram=is_diagram
+        ))
+
     # 添加最后一页
     if current_slide:
         presentation.slides.append(current_slide)
@@ -224,6 +288,47 @@ def parse_markdown(content: str) -> PresentationContent:
         presentation.title = presentation.slides[0].title
 
     return presentation
+
+
+def _is_diagram(code_content: str) -> bool:
+    """
+    检测代码内容是否为图表（流程图或矩阵图）
+
+    Args:
+        code_content: 代码块内容
+
+    Returns:
+        是否为图表类型
+    """
+    lines = code_content.strip().split('\n')
+
+    # 检测ASCII流程图特征
+    flowchart_patterns = [
+        r'[┌┬┐└┴┘├┤┼─│]',  # 框线字符
+        r'-->',              # 箭头
+        r'=>',               # 双箭头
+        r'<->',              # 双向箭头
+        r'\[.*?\]--',       # [节点]--
+        r'--\[.*?\]',       # --[节点]
+    ]
+
+    # 检测矩阵图特征
+    matrix_patterns = [
+        r'^[\s|\-+]*$',      # 纯线条行
+        r'\d+\s+\d+',        # 数字矩阵
+    ]
+
+    for line in lines:
+        for pattern in flowchart_patterns:
+            if re.search(pattern, line):
+                return True
+
+    # 检查是否有多行包含框线字符（可能是矩阵）
+    box_char_count = sum(1 for line in lines if re.search(r'[┌┬┐└┴┘├┤┼─│+|]', line))
+    if box_char_count >= 2:
+        return True
+
+    return False
 
 
 def parse_plain_text(content: str, chars_per_page: int = 500) -> PresentationContent:
