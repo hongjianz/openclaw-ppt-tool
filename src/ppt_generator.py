@@ -49,6 +49,38 @@ def safe_color(color_str: str, default: str = "#333333") -> RGBColor:
     return hex_to_rgb(default)
 
 
+def calculate_text_height(text: str, font_size_pt: float, line_spacing: float = 1.2, max_width_inches: float = 10.0) -> float:
+    """
+    计算文本实际占用高度（英寸）
+
+    Args:
+        text: 文本内容
+        font_size_pt: 字体大小（Pt）
+        line_spacing: 行间距倍数（默认1.2）
+        max_width_inches: 最大宽度（英寸）
+
+    Returns:
+        文本占用的实际高度（英寸）
+    """
+    if not text:
+        return 0
+
+    # 估算每行字符数（中文字符约占2个英文字符宽度）
+    # 假设平均每个字符宽度为 font_size * 0.6 英寸
+    char_width = font_size_pt / 72.0 * 0.6  # 转换为英寸
+    chars_per_line = max(int(max_width_inches / char_width), 1)
+
+    # 计算需要的行数
+    lines_needed = len(text) / chars_per_line
+    lines_needed = max(lines_needed, 1)  # 至少1行
+
+    # 计算总高度：行数 * (字体大小 + 行间距)
+    line_height = font_size_pt / 72.0 * line_spacing
+    total_height = lines_needed * line_height
+
+    return total_height
+
+
 class PPTGenerator:
     """PPT生成器"""
 
@@ -115,7 +147,7 @@ class PPTGenerator:
             print(f"警告: 无法生成QuintenStyle背景图片: {e}")
             return None
 
-    def _add_table(self, slide, table_data: TableData, left, top, width):
+    def _add_table(self, slide, table_data: TableData, left, top, width) -> float:
         """
         添加表格到幻灯片
 
@@ -125,12 +157,15 @@ class PPTGenerator:
             left: 左边距
             top: 顶部位置
             width: 表格宽度
+
+        Returns:
+            表格实际占用高度（英寸）
         """
         rows = len(table_data.rows) + 1  # +1 for header
         cols = len(table_data.headers)
 
         if rows == 0 or cols == 0:
-            return
+            return 0
 
         # 计算行高
         row_height = Inches(0.5)
@@ -208,6 +243,8 @@ class PPTGenerator:
                     cell.border_left.width = Pt(3.0)
                 if col_idx == cols - 1:
                     cell.border_right.width = Pt(3.0)
+
+        return height.inches
 
     def _download_image(self, url: str) -> Optional[str]:
         """
@@ -402,47 +439,75 @@ class PPTGenerator:
         # 添加表格
         if slide_content.table:
             table_top = current_top
-            self._add_table(slide, slide_content.table, margin_left, table_top, available_width)
-            current_top += Inches(3.0)  # 表格占用高度
+            table_height = self._add_table(slide, slide_content.table, margin_left, table_top, available_width)
+            current_top += Inches(table_height) + Inches(0.3)  # 使用实际高度
 
         # 添加项目符号列表
         if slide_content.bullet_points:
+            # 计算剩余可用高度
             remaining_height = available_height - (current_top - margin_top)
-            bullet_box = slide.shapes.add_textbox(
-                margin_left, current_top,
-                available_width, remaining_height
-            )
-            bullet_frame = bullet_box.text_frame
-            bullet_frame.word_wrap = True
-            bullet_frame.line_spacing = self.config.line_spacing
 
-            for i, point in enumerate(slide_content.bullet_points):
-                if i == 0:
-                    p = bullet_frame.paragraphs[0]
-                else:
-                    p = bullet_frame.add_paragraph()
+            # 如果剩余空间不足，跳过（智能分页应该已经处理了）
+            if remaining_height < Inches(1.0):
+                print(f"警告: 页面空间不足，跳过 {len(slide_content.bullet_points)} 个列表项")
+            else:
+                bullet_box = slide.shapes.add_textbox(
+                    margin_left, current_top,
+                    available_width, remaining_height
+                )
+                bullet_frame = bullet_box.text_frame
+                bullet_frame.word_wrap = True
+                bullet_frame.line_spacing = self.config.line_spacing
 
-                p.text = point
-                p.font.name = self.config.content_font
-                p.font.size = Pt(self.config.body_size)
-                p.font.color.rgb = safe_color(self.config.text_color, "#FFFFFF")
-                p.level = 0
-                p.space_before = Pt(6)
-                p.space_after = Pt(6)
+                for i, point in enumerate(slide_content.bullet_points):
+                    if i == 0:
+                        p = bullet_frame.paragraphs[0]
+                    else:
+                        p = bullet_frame.add_paragraph()
+
+                    p.text = point
+                    p.font.name = self.config.content_font
+                    p.font.size = Pt(self.config.body_size)
+                    p.font.color.rgb = safe_color(self.config.text_color, "#FFFFFF")
+                    p.level = 0
+                    p.space_before = Pt(6)
+                    p.space_after = Pt(6)
+
+                # 更新当前位置（估算列表占用高度）
+                list_height = len(slide_content.bullet_points) * (self.config.body_size / 72.0 * self.config.line_spacing + 0.1)
+                current_top += Inches(list_height)
 
         # 添加普通文本内容
         if slide_content.content_lines:
+            # 合并内容行
+            full_text = ' '.join(slide_content.content_lines)
+
+            # 计算文本实际占用高度
+            text_height = calculate_text_height(
+                full_text,
+                self.config.body_size,
+                self.config.line_spacing,
+                available_width.inches
+            )
+
+            # 计算剩余可用高度
             remaining_height = available_height - (current_top - margin_top)
+
+            # 如果文本会超出页面，截断并给出警告
+            if text_height > remaining_height.inches:
+                print(f"警告: 文本内容超出页面空间 ({text_height:.2f}\" > {remaining_height.inches:.2f}\")")
+                # 仍然添加，但限制高度
+                text_height_to_use = min(text_height, remaining_height.inches)
+            else:
+                text_height_to_use = text_height
+
             content_box = slide.shapes.add_textbox(
                 margin_left, current_top,
-                available_width, remaining_height
+                available_width, Inches(text_height_to_use)
             )
             content_frame = content_box.text_frame
             content_frame.word_wrap = True
             content_frame.line_spacing = self.config.line_spacing
-
-            # 合并内容行并按字符数换行
-            full_text = ' '.join(slide_content.content_lines)
 
             # 智能分段
             paragraphs = self._split_text_into_paragraphs(full_text)
@@ -459,6 +524,9 @@ class PPTGenerator:
                 p.font.color.rgb = safe_color(self.config.text_color, "#FFFFFF")
                 p.space_before = Pt(6)
                 p.space_after = Pt(6)
+
+            # 更新当前位置
+            current_top += Inches(text_height_to_use)
 
     def _split_text_into_paragraphs(self, text: str) -> List[str]:
         """
