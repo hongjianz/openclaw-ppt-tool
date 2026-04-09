@@ -30,6 +30,11 @@ from src.content_parser import smart_parse
 from src.smart_pagination import smart_paginate
 from src.toc_generator import insert_toc_at_beginning
 from src.ppt_generator import PPTGenerator
+from src.error_handler import (
+    validate_input_file, validate_output_path,
+    check_dependencies, print_dependency_help,
+    safe_generate_ppt, graceful_exit
+)
 
 
 def main():
@@ -82,10 +87,19 @@ def main():
 
     args = parser.parse_args()
 
-    # 检查输入文件是否存在
-    if not os.path.exists(args.input):
-        print(f"错误: 输入文件不存在: {args.input}")
-        sys.exit(1)
+    # 检查依赖
+    missing_deps = check_dependencies()
+    if missing_deps:
+        print_dependency_help(missing_deps)
+        graceful_exit("请先安装缺失的依赖", 1)
+
+    # 验证输入文件
+    if not validate_input_file(args.input):
+        graceful_exit("输入文件验证失败", 1)
+
+    # 验证输出路径
+    if not validate_output_path(args.output):
+        graceful_exit("输出路径验证失败", 1)
 
     # 加载配置
     config = None
@@ -159,10 +173,20 @@ def main():
 
     # 生成PPT
     print("生成PPT...")
-    generator = PPTGenerator(config)
-    generator.generate(content, args.output)
+    try:
+        generator = PPTGenerator(config)
+        success = safe_generate_ppt(generator, content, args.output)
 
-    print("完成!")
+        if success:
+            graceful_exit("完成!", 0)
+        else:
+            graceful_exit("PPT生成失败,请检查错误信息", 1)
+
+    except Exception as e:
+        logger.error(f"未知错误: {e}")
+        import traceback
+        traceback.print_exc()
+        graceful_exit("程序异常退出", 1)
 
 
 if __name__ == '__main__':
